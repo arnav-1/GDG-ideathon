@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dell-blue: #0076CE;
+  --color-dell-navy: #0058A3;
+  --color-dell-bg: #F8F8F8;
+  --color-dell-white: #FFFFFF;
+  --color-dell-text: #444444;
+}
+
+body {
+  background-color: var(--color-dell-bg);
+  color: var(--color-dell-text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Smooth scrolling for anchor links */
+html {
+  scroll-behavior: smooth;
+}
