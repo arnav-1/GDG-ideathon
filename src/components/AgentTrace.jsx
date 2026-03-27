@@ -1,14 +1,15 @@
 import { useAgentStore } from '../store/useAgentStore';
-import { Network, Search, ArrowRightLeft, PenTool, CheckCircle, Usb, Globe2, Loader2 } from 'lucide-react';
+import { Network, Search, ArrowRightLeft, PenTool, ShieldCheck, Usb, Globe2, Loader2, Volume2 } from 'lucide-react';
 
 const AGENTS = [
   { id: 'planning', name: 'Planning Agent', icon: Network, desc: 'Decomposes query elements' },
   { id: 'retrieval', name: 'Retrieval Agent', icon: Search, desc: 'Semantic search with temporality' },
   { id: 'conflict', name: 'Conflict Resolution Agent', icon: ArrowRightLeft, desc: 'Resolves data contradictions' },
   { id: 'synthesis', name: 'Synthesis Agent', icon: PenTool, desc: 'Drafts cited response payload' },
-  { id: 'verifier', name: 'Verifier Agent', icon: CheckCircle, desc: 'Cross-references source material' },
+  { id: 'verifier', name: 'Verifier Agent', icon: ShieldCheck, desc: 'Cross-references source material' },
   { id: 'persona', name: 'Persona Agent', icon: Usb, desc: 'Adjusts enterprise tone' },
   { id: 'translator', name: 'Translator Agent', icon: Globe2, desc: 'Localizes final output' },
+  { id: 'voice', name: 'Voice Agent', icon: Volume2, desc: 'Generates audio output' },
 ];
 
 export default function AgentTrace() {
@@ -50,7 +51,7 @@ export default function AgentTrace() {
             >
               <div 
                 className={`w-12 h-12 rounded-full border-2 flex items-center justify-center bg-white transition-all duration-300 ${
-                  isCurrent ? 'border-[#0076CE] text-[#0076CE] shadow-[0_0_15px_rgba(0,118,206,0.5)] ring-4 ring-[#0076CE]/10 animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]' : 
+                  isCurrent ? (agent.id === 'conflict' ? 'border-[#ED8B00] text-[#ED8B00] shadow-[0_0_15px_rgba(237,139,0,0.5)] ring-4 ring-[#ED8B00]/10 animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]' : 'border-[#0076CE] text-[#0076CE] shadow-[0_0_15px_rgba(0,118,206,0.5)] ring-4 ring-[#0076CE]/10 animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]') : 
                   isPast && !isIdle ? 'border-green-500 text-green-600 bg-emerald-50' : 
                   'border-slate-200 text-slate-400 bg-slate-50/50'
                 }`}
@@ -59,7 +60,7 @@ export default function AgentTrace() {
               </div>
               <div className="pt-2 flex-grow">
                 <p className={`font-bold tracking-tight transition-colors duration-300 ${
-                  isCurrent ? 'text-[#0076CE]' : 
+                  isCurrent ? (agent.id === 'conflict' ? 'text-[#ED8B00]' : 'text-[#0076CE]') : 
                   isPast && !isIdle ? 'text-slate-900' : 
                   'text-slate-500'
                 }`}>
@@ -68,7 +69,7 @@ export default function AgentTrace() {
                 <p className="text-sm text-slate-500 font-medium">{agent.desc}</p>
 
                 {isCurrent && (
-                  <div className="mt-2 text-xs italic text-[#0076CE] font-mono opacity-80 animate-pulse">
+                  <div className={`mt-2 text-xs italic font-mono opacity-80 animate-pulse ${agent.id === 'conflict' ? 'text-[#ED8B00]' : 'text-[#0076CE]'}`}>
                     Executing neural logic...
                   </div>
                 )}
