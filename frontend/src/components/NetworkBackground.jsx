@@ -106,7 +106,7 @@ function Network() {
 export default function NetworkBackground() {
   return (
     <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-gradient-to-br from-[#F8FAFC] to-[#FFFFFF]">
-      <div className="opacity-20 w-full h-full">
+      <div className="opacity-50 w-full h-full">
         <Canvas camera={{ position: [0, 0, 20], fov: 60 }}>
           <fog attach="fog" args={['#F8FAFC', 8, 30]} />
           <ambientLight intensity={1} />
