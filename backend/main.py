@@ -1,4 +1,5 @@
 import re
+import uuid
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict
@@ -11,6 +12,7 @@ class QueryRequest(BaseModel):
     query: str
     persona: str = Field(default="Standard User")
     language: str = Field(default="English")
+    thread_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
 class Source(BaseModel):
     title: str
@@ -20,6 +22,7 @@ class QueryResponse(BaseModel):
     status: str
     answer: str
     sources: List[Source]
+    thread_id: str
 
 # --- Endpoints ---
 
@@ -27,6 +30,7 @@ class QueryResponse(BaseModel):
 async def process_query(request: QueryRequest):
     try:
         initial_state = {
+            "messages": [],
             "user_query": request.query,
             "persona": request.persona,
             "language": request.language,
@@ -38,7 +42,8 @@ async def process_query(request: QueryRequest):
             "sources": []
         }
         
-        result = await app_graph.ainvoke(initial_state)
+        config = {"configurable": {"thread_id": request.thread_id}}
+        result = await app_graph.ainvoke(initial_state, config=config)
         
         # Extract the thinking and answer sections
         full_text = result["final_answer"]
@@ -54,7 +59,8 @@ async def process_query(request: QueryRequest):
         return QueryResponse(
             status="success" if result["retrieved_docs"] else "partial_success",
             answer=clean_answer,
-            sources=result["sources"]
+            sources=result["sources"],
+            thread_id=request.thread_id
         )
     except Exception as e:
         print(f"Error processing query: {e}")

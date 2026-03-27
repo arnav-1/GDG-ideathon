@@ -2,11 +2,12 @@ import os
 import json
 import re
 import numpy as np
-from typing import TypedDict, List, Dict, Optional
+from typing import TypedDict, List, Dict, Optional, Annotated
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, END, add_messages
+from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage, SystemMessage
 from rank_bm25 import BM25Okapi
 from pinecone import Pinecone
@@ -15,6 +16,7 @@ load_dotenv()
 
 
 class AgentState(TypedDict):
+    messages: Annotated[List, add_messages]
     user_query: str
     persona: str
     language: str
@@ -294,6 +296,7 @@ def create_graph():
     workflow.add_edge("retriever", "synthesizer")
     workflow.add_edge("synthesizer", END)
 
-    return workflow.compile()
+    memory = MemorySaver()
+    return workflow.compile(checkpointer=memory)
 
 app_graph = create_graph()
