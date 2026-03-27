@@ -28,6 +28,7 @@ class AgentState(TypedDict):
     sources: List[Dict]
     is_valid: bool
     evaluation_feedback: str
+    conflict_resolution_notes: str
 
 
 
@@ -253,8 +254,38 @@ def retriever_node(state: AgentState) -> Dict:
     
     return {"retrieved_docs": retrieved_docs, "sources": sources}
 
+def conflict_manager_node(state: AgentState) -> Dict:
+    """Agent 3b: Conflict Manager - resolves contradicting information based on document timestamps."""
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+    
+    docs_str = "\n".join([
+        f"[Document: {d['source']}, Page: {d['page']}, Timestamp: {d.get('timestamp', 'unknown')}]\n{d['content']}"
+        for d in state["retrieved_docs"]
+    ])
+    
+    system_prompt = (
+        "You are an Enterprise Data Conflict Resolver. "
+        "Review the following <retrieved_docs>. Pay close attention to the metadata, specifically the `timestamp` or date indicators. "
+        "Your task: Identify if there are any direct contradictions between the documents regarding technical specs, limits, pricing, or features. "
+        "- If you find a contradiction: Write a strict instruction for the final writer, telling them which document to trust based on the most recent timestamp. "
+        "- If there are no contradictions: Output exactly \"No conflicts detected.\" "
+        "Output ONLY your resolution instructions or \"No conflicts detected.\" Do not add conversational filler."
+    )
+    
+    user_msg = (
+        f"<retrieved_docs>\n{docs_str}\n</retrieved_docs>\n\n"
+        f"Analyze for contradictions and provide resolution guidance."
+    )
+    
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_msg)
+    ])
+    
+    return {"conflict_resolution_notes": response.content}
+
 def synthesizer_node(state: AgentState) -> Dict:
-    """Agent 3: Synthesizes final answer with step-by-step reasoning and citations."""
+    """Agent 4: Synthesizes final answer with step-by-step reasoning and citations."""
     llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
     
     context_str = "\n".join([f"Source: {d['source']}, Page: {d['page']}\nContent: {d['content']}" for d in state["retrieved_docs"]])
@@ -266,6 +297,7 @@ def synthesizer_node(state: AgentState) -> Dict:
         "2. Adopt the Persona: You must tailor your tone, vocabulary, and structural formatting to match the user's requested <persona>.\n"
         "3. Cite Your Sources: Every factual claim must be followed by an inline citation using the source metadata provided in the context. Format citations like this: [Source: DocumentName.pdf, Page: X].\n"
         "4. Language: The final output must be translated natively into the requested <language>.\n"
+        "5. CRITICAL - Conflict Resolution: If <conflict_resolution_notes> contains anything other than 'No conflicts detected', you MUST follow its instructions on which facts to prioritize and which to ignore. This overrides any other instruction.\n"
         "</instructions>\n\n"
         "Take a deep breath and think step-by-step. First, write out your reasoning and map out which facts from the <context> answer the <user_query> inside <thinking> tags. Then, provide your final formatted response."
     )
@@ -273,6 +305,7 @@ def synthesizer_node(state: AgentState) -> Dict:
     user_msg = (
         f"<persona>{state['persona']}</persona>\n"
         f"<language>{state['language']}</language>\n"
+        f"<conflict_resolution_notes>{state.get('conflict_resolution_notes', 'No conflicts detected.')}</conflict_resolution_notes>\n"
         f"<context>\n{context_str}\n</context>\n"
         f"<user_query>{state['user_query']}</user_query>"
     )
@@ -328,12 +361,14 @@ def create_graph():
 
     workflow.add_node("planner", planner_node)
     workflow.add_node("retriever", retriever_node)
+    workflow.add_node("conflict_manager", conflict_manager_node)
     workflow.add_node("synthesizer", synthesizer_node)
     workflow.add_node("evaluator", evaluator_node)
 
     workflow.set_entry_point("planner")
     workflow.add_edge("planner", "retriever")
-    workflow.add_edge("retriever", "synthesizer")
+    workflow.add_edge("retriever", "conflict_manager")
+    workflow.add_edge("conflict_manager", "synthesizer")
     workflow.add_edge("synthesizer", "evaluator")
     
     # Conditional routing: if is_valid=True go to END, else loop back to synthesizer for correction
