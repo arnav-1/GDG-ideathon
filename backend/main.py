@@ -2,7 +2,7 @@ import re
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict
-from backend.graph import app_graph
+from graph import app_graph
 
 app = FastAPI(title="Smart Knowledge Navigator API v1")
 

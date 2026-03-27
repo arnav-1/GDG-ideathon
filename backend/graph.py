@@ -6,14 +6,14 @@ from typing import TypedDict, List, Dict, Optional
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_pinecone import PineconeVectorStore
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, SystemMessage
 from rank_bm25 import BM25Okapi
+from pinecone import Pinecone
 
 load_dotenv()
 
-# --- State Definition ---
+
 class AgentState(TypedDict):
     user_query: str
     persona: str
@@ -25,7 +25,7 @@ class AgentState(TypedDict):
     final_answer: str
     sources: List[Dict]
 
-# --- Nodes ---
+
 
 def planner_node(state: AgentState) -> Dict:
     """Agent 1: Generate HyDE, extract filters, and expand query variations."""
@@ -111,12 +111,18 @@ def retriever_node(state: AgentState) -> Dict:
     3. Re-ranking: Combines scores and re-ranks top-10
     """
     embeddings = HuggingFaceEmbeddings(model_name=os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"))
-    vectorstore = PineconeVectorStore(
-        index_name=os.getenv("PINECONE_INDEX_NAME"),
-        embedding=embeddings
-    )
+    
+    # Initialize Pinecone client and index
+    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+    index_name = os.getenv("PINECONE_INDEX_NAME")
+    index = pc.Index(index_name)
     
     filter_dict = state.get("filters", {})
+    
+    # Build Pinecone filter if category is specified
+    pinecone_filter = None
+    if filter_dict and "category" in filter_dict and filter_dict["category"]:
+        pinecone_filter = {"category": {"$eq": filter_dict["category"]}}
     
     # Parse search query to extract HyDE and variations
     try:
@@ -126,45 +132,40 @@ def retriever_node(state: AgentState) -> Dict:
     except:
         hyde_query = state.get("hypothetical_document", state["user_query"])
         query_variations = []
-    
-    # Build list of all queries to search
     all_queries = [hyde_query] + query_variations
+    semantic_results = {}  
     
-    # --- SEMANTIC SEARCH ---
-    semantic_results = {}  # {doc_content: max_score}
-    
+    # --- SEMANTIC SEARCH PHASE ---
     for query in all_queries:
         try:
-            docs = vectorstore.similarity_search(
-                query,
-                k=15,  # Fetch more for re-ranking
-                filter=filter_dict if filter_dict else None
-            )
-            
-            # Get embeddings for re-ranking
+            # Get embedding for query
             query_embedding = embeddings.embed_query(query)
             
-            for doc in docs:
-                doc_content = doc.page_content
-                doc_embedding = embeddings.embed_query(doc_content)
+            # Query Pinecone
+            results = index.query(
+                vector=query_embedding,
+                top_k=15,
+                include_metadata=True,
+                filter=pinecone_filter
+            )
+            
+            # Process results
+            for match in results.get("matches", []):
+                doc_content = match.get("metadata", {}).get("text", "")
+                similarity = match.get("score", 0)
                 
-                # Cosine similarity
-                similarity = np.dot(query_embedding, doc_embedding) / (
-                    np.linalg.norm(query_embedding) * np.linalg.norm(doc_embedding) + 1e-8
-                )
-                
-                # Store max score across all query variations
-                if doc_content not in semantic_results:
-                    semantic_results[doc_content] = {
-                        "score": similarity,
-                        "doc": doc,
-                        "source": doc.metadata.get("source", "Unknown"),
-                        "page": doc.metadata.get("page_number", 0)
-                    }
-                else:
-                    semantic_results[doc_content]["score"] = max(
-                        semantic_results[doc_content]["score"], similarity
-                    )
+                if doc_content:
+                    # Store max score across all query variations
+                    if doc_content not in semantic_results:
+                        semantic_results[doc_content] = {
+                            "score": similarity,
+                            "source": match.get("metadata", {}).get("source", "Unknown"),
+                            "page": match.get("metadata", {}).get("page_number", 0)
+                        }
+                    else:
+                        semantic_results[doc_content]["score"] = max(
+                            semantic_results[doc_content]["score"], similarity
+                        )
         except Exception as e:
             print(f"Error in semantic search for query '{query}': {e}")
             continue
@@ -177,7 +178,7 @@ def retriever_node(state: AgentState) -> Dict:
     bm25_results = {}  # {doc_content: bm25_score}
     
     # Build corpus from semantic results (to ensure consistency)
-    corpus = [doc_data["doc"].page_content for doc_data in semantic_results.values()]
+    corpus = list(semantic_results.keys())
     
     # Tokenize for BM25
     tokenized_corpus = [doc.lower().split() for doc in corpus]

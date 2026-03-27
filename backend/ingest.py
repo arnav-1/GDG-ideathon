@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 
 load_dotenv()
@@ -120,14 +119,40 @@ def ingest_docs(data_dir: str = "data"):
             spec=ServerlessSpec(cloud="aws", region="us-east-1")
         )
 
-    # 4. Upsert to Pinecone
+    # Upsert to Pinecone directly
     try:
-        PineconeVectorStore.from_documents(
-            chunks,
-            embeddings,
-            index_name=index_name
-        )
-        print("Successfully ingested documents into Pinecone.")
+        index = pc.Index(index_name)
+        vectors_to_upsert = []
+        
+        for idx, chunk in enumerate(chunks):
+            # Generate embedding for chunk
+            embedding = embeddings.embed_query(chunk.page_content)
+            
+            # Create unique ID for each chunk (incremental)
+            chunk_id = f"chunk_{idx}"
+            
+            # Prepare vector for upsert with rich metadata
+            vector = (
+                chunk_id,
+                embedding,
+                {
+                    "source": chunk.metadata.get("source", "Unknown"),
+                    "category": chunk.metadata.get("category", "General"),
+                    "page_number": chunk.metadata.get("page_number", 0),
+                    "timestamp": chunk.metadata.get("timestamp", int(time.time())),
+                    "text": chunk.page_content[:500]  # Store first 500 chars as preview
+                }
+            )
+            vectors_to_upsert.append(vector)
+        
+        # Upsert in batches of 100
+        batch_size = 100
+        for i in range(0, len(vectors_to_upsert), batch_size):
+            batch = vectors_to_upsert[i:i + batch_size]
+            index.upsert(vectors=batch)
+            print(f"Upserted batch {i // batch_size + 1}/{(len(vectors_to_upsert) + batch_size - 1) // batch_size}")
+        
+        print(f"Successfully ingested {len(vectors_to_upsert)} vectors into Pinecone index '{index_name}'.")
     except Exception as e:
         print(f"Failed to upsert to Pinecone: {e}")
 

@@ -4,10 +4,9 @@ langchain
 langchain-community
 langchain-groq
 langchain-huggingface
-langchain-pinecone
 langgraph
-pinecone-client
-pypdf
+pinecone>=4.0.0
+pymupdf
 pydantic
 python-dotenv
 sentence-transformers
