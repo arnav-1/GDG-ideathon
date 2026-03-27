@@ -29,7 +29,7 @@ class AgentState(TypedDict):
 
 def planner_node(state: AgentState) -> Dict:
     """Agent 1: Generate HyDE, extract filters, and expand query variations."""
-    llm = ChatGroq(model="llama3-70b-8192", temperature=0)
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
     
     system_prompt = (
         "You are an expert Search Retrieval Architect. Your task is to optimize a user's query for a Vector Database search. "
@@ -251,7 +251,7 @@ def retriever_node(state: AgentState) -> Dict:
 
 def synthesizer_node(state: AgentState) -> Dict:
     """Agent 3: Synthesizes final answer with step-by-step reasoning and citations."""
-    llm = ChatGroq(model="llama3-70b-8192", temperature=0.2)
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0.2)
     
     context_str = "\n".join([f"Source: {d['source']}, Page: {d['page']}\nContent: {d['content']}" for d in state["retrieved_docs"]])
     
