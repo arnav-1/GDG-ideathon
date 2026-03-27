@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import AgentTrace from '../components/AgentTrace';
 import Navbar from '../components/Navbar';
 import { useAgentStore } from '../store/useAgentStore';
-import { Send, FileText, Anchor, FileQuestion } from 'lucide-react';
+import { Send, FileText, Anchor, FileQuestion, Play, Pause, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function Citation({ tag }) {
@@ -50,6 +50,43 @@ export default function RagDashboard() {
     startProcessing(localQuery); // Kicks off AgentTrace sequence
   };
 
+  // Auto cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const handleVoicePlay = () => {
+    if ('speechSynthesis' in window && synthesisData?.text) {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      } else {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(synthesisData.text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+  };
+
+  const handleVoicePause = () => {
+    if ('speechSynthesis' in window) {
+      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        window.speechSynthesis.pause();
+      }
+    }
+  };
+
+  const handleVoiceStop = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-transparent text-slate-500 font-sans selection:bg-[#0076CE] selection:text-white pb-20 relative">
       <Navbar />
@@ -74,6 +111,7 @@ export default function RagDashboard() {
           <form onSubmit={handleSubmit} className="flex gap-2">
             <input
               type="text"
+              aria-label="Search Query"
               value={localQuery}
               onChange={(e) => setLocalQuery(e.target.value)}
               placeholder="e.g. Try searching for 'updated remote work policy for 2026', or 'fail' to test errors..."
@@ -82,6 +120,7 @@ export default function RagDashboard() {
             />
             <button
               type="submit"
+              aria-label="Submit Search"
               disabled={isProcessing || !localQuery.trim()}
               className="bg-gradient-to-r from-[#0076CE] to-[#00447C] hover:text-white hover:scale-105 text-white px-8 py-4 rounded-xl font-bold transition-transform duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-[0_0_15px_rgba(0,118,206,0.3)] tracking-tight"
             >
@@ -139,13 +178,38 @@ export default function RagDashboard() {
                    animate={{ opacity: 1, x: 0 }}
                    className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-8 h-full min-h-[500px]"
                  >
-                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-200">
-                    <div className="bg-[#0076CE] p-2 rounded-md text-white shadow-sm">
-                      <CheckIcon />
+                  <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-[#0076CE] p-2 rounded-md text-white shadow-sm">
+                        <CheckIcon />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold tracking-tight text-slate-900">Verified Answer</h3>
+                        <p className="text-xs text-slate-500 font-mono">Synthesized in {synthesisData.time} | Confidence: {synthesisData.confidence}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight text-slate-900">Verified Answer</h3>
-                      <p className="text-xs text-slate-500 font-mono">Synthesized in {synthesisData.time} | Confidence: {synthesisData.confidence}</p>
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={handleVoicePlay}
+                        aria-label="Play Voice"
+                        className="p-2 text-slate-400 hover:text-[#0076CE] hover:bg-[#0076CE]/10 rounded-lg transition-colors title='Play Voice'"
+                      >
+                        <Play className="w-5 h-5 fill-current" />
+                      </button>
+                      <button 
+                        onClick={handleVoicePause}
+                        aria-label="Pause Voice"
+                        className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors title='Pause Voice'"
+                      >
+                        <Pause className="w-5 h-5 fill-current" />
+                      </button>
+                      <button 
+                        onClick={handleVoiceStop}
+                        aria-label="Stop Voice"
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors title='Stop Voice'"
+                      >
+                        <Square className="w-4 h-4 ml-0.5 fill-current" />
+                      </button>
                     </div>
                   </div>
 
@@ -192,7 +256,7 @@ export default function RagDashboard() {
                     <p className="text-sm max-w-sm leading-relaxed text-slate-500 mb-6">
                       The retrieval agent was unable to locate any internal documentation matching your query within the selected permission scope.
                     </p>
-                    <button className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-900 font-bold tracking-tight rounded-lg shadow-sm transition-colors text-sm">
+                    <button aria-label="Modify Search Parameters" className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-900 font-bold tracking-tight rounded-lg shadow-sm transition-colors text-sm">
                       Modify Search Parameters
                     </button>
                  </motion.div>

@@ -4,7 +4,7 @@ import { Float } from '@react-three/drei';
 import * as THREE from 'three';
 import { useLocation } from 'react-router-dom';
 
-function Network({ isDashboard }) {
+function Network() {
   const groupRef = useRef();
 
   const circleTexture = useMemo(() => {
@@ -23,7 +23,7 @@ function Network({ isDashboard }) {
 
   const { positions, linesArray } = useMemo(() => {
     const minDistance = 3.5;
-    const pointsCount = isDashboard ? 120 : 200;
+    const pointsCount = 150;
 
     const pts = [];
     for (let i = 0; i < pointsCount; i++) {
@@ -55,7 +55,7 @@ function Network({ isDashboard }) {
 
     const finalLines = new Float32Array(lnArray);
     return { positions: posArray, linesArray: finalLines };
-  }, [isDashboard]);
+  }, []);
 
   useFrame((state, delta) => {
     if (groupRef.current) {
@@ -81,7 +81,7 @@ function Network({ isDashboard }) {
             color="#0076CE"
             map={circleTexture}
             transparent
-            opacity={isDashboard ? 0.3 : 0.8}
+            opacity={0.5}
             alphaTest={0.05}
             sizeAttenuation={true}
           />
@@ -96,7 +96,7 @@ function Network({ isDashboard }) {
               itemSize={3}
             />
           </bufferGeometry>
-          <lineBasicMaterial color="#0058A3" transparent opacity={isDashboard ? 0.1 : 0.3} />
+          <lineBasicMaterial color="#0058A3" transparent opacity={0.2} />
         </lineSegments>
       </Float>
     </group>
@@ -104,16 +104,13 @@ function Network({ isDashboard }) {
 }
 
 export default function NetworkBackground() {
-  const location = useLocation();
-  const isDashboard = location.pathname === '/rag' || location.pathname === '/dashboard';
-
   return (
-    <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden bg-gradient-to-br from-[#F8FAFC] to-[#FFFFFF]">
-      <div className={`transition-opacity duration-1000 ${isDashboard ? 'opacity-10' : 'opacity-100'} w-full h-full`}>
+    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-gradient-to-br from-[#F8FAFC] to-[#FFFFFF]">
+      <div className="opacity-50 w-full h-full">
         <Canvas camera={{ position: [0, 0, 20], fov: 60 }}>
           <fog attach="fog" args={['#F8FAFC', 8, 30]} />
           <ambientLight intensity={1} />
-          <Network isDashboard={isDashboard} />
+          <Network />
         </Canvas>
       </div>
       <div className="absolute inset-0 bg-gradient-to-b from-[#F8FAFC]/40 via-transparent to-[#F8FAFC]/20"></div>

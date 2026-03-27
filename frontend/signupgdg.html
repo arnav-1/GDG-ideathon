@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dell | Employee Registration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            background-image:url('https://static.vecteezy.com/system/resources/previews/072/129/381/non_2x/pale-blue-and-white-geometric-shapes-create-a-modern-abstract-background-with-depth-free-photo.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            font-family: 'Roboto', Arial, sans-serif;
+        }
+        .dell-blue { background-color: #0672CB; }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-[450px] bg-white/95 backdrop-blur-sm p-10 border border-gray-300 shadow-2xl relative">
+        <div class="absolute top-0 left-0 w-full h-[5px] dell-blue"></div>
+        
+        <h1 class="text-2xl font-light text-gray-800 mb-6 uppercase tracking-widest text-center">Registration</h1>
+
+        <form id="signup-form" class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold uppercase text-gray-500 mb-1 tracking-tighter">Full Name</label>
+                <input type="text" id="fullname" required class="w-full p-2 border border-gray-400 rounded-none focus:border-[#0672CB] outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-bold uppercase text-gray-500 mb-1 tracking-tighter">Employee ID</label>
+                <input type="text" id="employee_id" required class="w-full p-2 border border-gray-400 rounded-none focus:border-[#0672CB] outline-none" placeholder="DELL-XXXXX">
+            </div>
+            <div>
+                <label class="block text-xs font-bold uppercase text-gray-500 mb-1 tracking-tighter">Email Address</label>
+                <input type="email" id="email" required class="w-full p-2 border border-gray-400 rounded-none focus:border-[#0672CB] outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-bold uppercase text-gray-500 mb-1 tracking-tighter">Password</label>
+                <input type="password" id="password" required class="w-full p-2 border border-gray-400 rounded-none focus:border-[#0672CB] outline-none">
+            </div>
+            
+            <button type="submit" class="w-full dell-blue text-white py-3 font-bold rounded-none hover:bg-[#004A77] transition-all tracking-widest">
+                CREATE ACCOUNT
+            </button>
+        </form>
+
+        <div class="mt-6 text-center border-t border-gray-200 pt-4">
+            <p class="text-sm text-gray-600">
+                Already registered? 
+                <a href="logingdg.html" class="text-[#0672CB] font-bold ml-1 hover:underline">Sign In</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://nxivdzswpepzlsyquxre.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_oMksbpeu4z3k6Q0ot_Dkrg_ZBEu8lFO';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        document.getElementById('signup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const fullName = document.getElementById('fullname').value;
+            const empId = document.getElementById('employee_id').value;
+
+            const { data, error } = await supabaseClient.auth.signUp({
+                email: email,
+                password: password,
+                options: {
+                    data: {
+                        full_name: fullName,
+                        employee_id: empId
+                    }
+                }
+            });
+
+            if (error) {
+                alert("Error: " + error.message);
+            } else {
+                alert("Account Created! You can now sign in.");
+                window.location.href = "login.html";
+            }
+        });
+    </script>
+</body>
+</html>
