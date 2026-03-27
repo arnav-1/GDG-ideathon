@@ -1,9 +1,11 @@
 import re
 import uuid
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict
 from graph import app_graph
+from ingest import ingest_from_files
 
 app = FastAPI(title="Smart Knowledge Navigator API v1")
 
@@ -23,6 +25,13 @@ class QueryResponse(BaseModel):
     answer: str
     sources: List[Source]
     thread_id: str
+
+class IngestResponse(BaseModel):
+    status: str
+    message: str
+    vectors_upserted: int
+    documents_processed: int = 0
+    errors: List[str] = None
 
 # --- Endpoints ---
 
@@ -65,6 +74,44 @@ async def process_query(request: QueryRequest):
     except Exception as e:
         print(f"Error processing query: {e}")
         raise HTTPException(status_code=500, detail=f"Query processing failed: {str(e)}")
+
+@app.post("/api/v1/ingest", response_model=IngestResponse)
+async def ingest_documents(files: List[UploadFile] = File(...)):
+    """
+    Ingests PDF documents into the Pinecone vector store.
+    Accepts multiple PDF files via multipart/form-data.
+    Returns metadata about the ingestion including number of vectors upserted.
+    """
+    try:
+        if not files:
+            raise HTTPException(status_code=400, detail="No files provided")
+        
+        # Convert UploadFile objects to tuples (filename, bytes)
+        file_tuples = []
+        for uploaded_file in files:
+            if not uploaded_file.filename.lower().endswith('.pdf'):
+                continue  # Skip non-PDF files, errors will be reported in response
+            content = await uploaded_file.read()
+            file_tuples.append((uploaded_file.filename, content))
+        
+        if not file_tuples:
+            raise HTTPException(status_code=400, detail="No valid PDF files provided")
+        
+        # Ingest files
+        result = ingest_from_files(file_tuples)
+        
+        return IngestResponse(
+            status=result["status"],
+            message=result["message"],
+            vectors_upserted=result["vectors_upserted"],
+            documents_processed=result.get("documents_processed", 0),
+            errors=result.get("errors")
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error during ingestion: {e}")
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
