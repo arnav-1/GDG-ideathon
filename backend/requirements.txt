@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+langchain
+langchain-community
+langchain-groq
+langchain-huggingface
+langchain-pinecone
+langgraph
+pinecone-client
+pypdf
+pydantic
+python-dotenv
+sentence-transformers
+numpy
+rank-bm25
+
