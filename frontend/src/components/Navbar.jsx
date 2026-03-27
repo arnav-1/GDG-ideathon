@@ -1,10 +1,12 @@
 import { BrainCircuit } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useAuthStore } from '../store/useAuthStore';
 
 export default function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, role, signOut } = useAuthStore();
 
   const handleNav = (e, id) => {
     e.preventDefault();
@@ -43,18 +45,33 @@ export default function Navbar() {
             <a href="#features" aria-label="Features" onClick={(e) => handleNav(e, 'features')} className="hover:text-[#0076CE] transition-colors cursor-pointer tracking-tight">Features</a>
             <a href="#enterprise" aria-label="Enterprise" onClick={(e) => handleNav(e, 'enterprise')} className="hover:text-[#0076CE] transition-colors cursor-pointer tracking-tight">Enterprise</a>
             <a href="#security" aria-label="Security" onClick={(e) => handleNav(e, 'security')} className="hover:text-[#0076CE] transition-colors cursor-pointer tracking-tight">Security</a>
-            <Link to="/admin" className={`transition-colors cursor-pointer tracking-tight ${location.pathname === '/admin' ? 'text-[#0672CE] border-b-2 border-[#0672CE] -mb-[2px]' : 'hover:text-[#0672CE]'}`}>
-              HR Portal
-            </Link>
+            {role === 'admin' && (
+              <Link to="/admin" className={`transition-colors cursor-pointer tracking-tight ${location.pathname === '/admin' ? 'text-[#0672CE] border-b-2 border-[#0672CE] -mb-[2px]' : 'hover:text-[#0672CE]'}`}>
+                HR Portal
+              </Link>
+            )}
           </div>
           
           <div className="flex items-center gap-3 border-l border-slate-200 pl-6 h-8">
-            <Link to="/login" aria-label="Log In" className="text-sm font-bold text-slate-500 hover:text-[#0076CE] px-4 py-2 hover:bg-slate-50 rounded-lg transition-colors tracking-tight">
-              Log In
-            </Link>
-            <Link to="/signup" aria-label="Sign In" className="bg-gradient-to-r from-[#0076CE] to-[#0058A3] hover:scale-105 text-sm font-bold text-white px-5 py-2 rounded-lg transition-all shadow-[0_0_15px_rgba(0,118,206,0.3)] tracking-tight inline-block text-center">
-              Sign In
-            </Link>
+            {!user ? (
+               <>
+                 <Link to="/login" aria-label="Log In" className="text-sm font-bold text-slate-500 hover:text-[#0076CE] px-4 py-2 hover:bg-slate-50 rounded-lg transition-colors tracking-tight">
+                   Log In
+                 </Link>
+                 <Link to="/signup" aria-label="Sign In" className="bg-gradient-to-r from-[#0076CE] to-[#0058A3] hover:scale-105 text-sm font-bold text-white px-5 py-2 rounded-lg transition-all shadow-[0_0_15px_rgba(0,118,206,0.3)] tracking-tight inline-block text-center mt-0.5">
+                   Sign In
+                 </Link>
+               </>
+            ) : (
+               <>
+                 <Link to="/dashboard" aria-label="Dashboard" className="text-sm font-bold text-slate-500 hover:text-[#0076CE] px-4 py-2 hover:bg-slate-50 rounded-lg transition-colors tracking-tight">
+                   Dashboard
+                 </Link>
+                 <button onClick={async () => { await signOut(); navigate('/login'); }} aria-label="Log Out" className="text-sm font-bold text-red-500 hover:text-red-700 px-4 py-2 hover:bg-red-50 rounded-lg transition-colors tracking-tight mt-0.5">
+                   Log Out
+                 </button>
+               </>
+            )}
           </div>
         </div>
       </div>

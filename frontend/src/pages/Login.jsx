@@ -27,7 +27,7 @@ export default function Login() {
       <div className="w-full max-w-[420px] bg-white/80 backdrop-blur-lg p-10 border border-white/20 shadow-2xl relative z-20 rounded-xl mt-16">
         <div className="absolute top-0 left-0 w-full h-[5px] bg-[#0672CE] rounded-t-xl"></div>
         
-        <h1 className="text-2xl font-light text-slate-800 mb-8 uppercase tracking-widest text-center">Employee Sign In</h1>
+        <h1 className="text-2xl font-light text-slate-800 mb-8 uppercase tracking-widest text-center">Log In</h1>
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
@@ -54,7 +54,7 @@ export default function Login() {
           {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
 
           <button type="submit" className="w-full bg-[#0672CE] text-white py-3 font-bold rounded-none hover:bg-[#004A77] transition-all tracking-widest cursor-pointer shadow-md">
-            SIGN IN
+            LOG IN
           </button>
         </form>
 

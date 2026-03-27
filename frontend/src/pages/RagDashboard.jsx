@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import AgentTrace from '../components/AgentTrace';
 import Navbar from '../components/Navbar';
 import { useAgentStore } from '../store/useAgentStore';
-import { Send, FileText, Anchor, FileQuestion, Volume2 } from 'lucide-react';
+import { Send, FileText, Anchor, FileQuestion, Play, Pause, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 function Citation({ tag }) {
@@ -50,32 +50,42 @@ export default function RagDashboard() {
     startProcessing(localQuery); // Kicks off AgentTrace sequence
   };
 
-  const handleVoiceOutput = () => {
-    if ('speechSynthesis' in window && synthesisData?.text) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(synthesisData.text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
-
-  // Voice logic to auto-speak when new synthesis data arrives
+  // Auto cleanup on unmount
   useEffect(() => {
-    if ('speechSynthesis' in window && synthesisData?.text) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(synthesisData.text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      window.speechSynthesis.speak(utterance);
-    }
-    
     return () => {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
     };
-  }, [synthesisData]);
+  }, []);
+
+  const handleVoicePlay = () => {
+    if ('speechSynthesis' in window && synthesisData?.text) {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      } else {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(synthesisData.text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+  };
+
+  const handleVoicePause = () => {
+    if ('speechSynthesis' in window) {
+      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        window.speechSynthesis.pause();
+      }
+    }
+  };
+
+  const handleVoiceStop = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-transparent text-slate-500 font-sans selection:bg-[#0076CE] selection:text-white pb-20 relative">
@@ -178,13 +188,29 @@ export default function RagDashboard() {
                         <p className="text-xs text-slate-500 font-mono">Synthesized in {synthesisData.time} | Confidence: {synthesisData.confidence}</p>
                       </div>
                     </div>
-                    <button 
-                      onClick={handleVoiceOutput}
-                      aria-label="Speak results"
-                      className="p-2 text-slate-400 hover:text-[#0076CE] hover:bg-[#0076CE]/10 rounded-lg transition-colors"
-                    >
-                      <Volume2 className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={handleVoicePlay}
+                        aria-label="Play Voice"
+                        className="p-2 text-slate-400 hover:text-[#0076CE] hover:bg-[#0076CE]/10 rounded-lg transition-colors title='Play Voice'"
+                      >
+                        <Play className="w-5 h-5 fill-current" />
+                      </button>
+                      <button 
+                        onClick={handleVoicePause}
+                        aria-label="Pause Voice"
+                        className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors title='Pause Voice'"
+                      >
+                        <Pause className="w-5 h-5 fill-current" />
+                      </button>
+                      <button 
+                        onClick={handleVoiceStop}
+                        aria-label="Stop Voice"
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors title='Stop Voice'"
+                      >
+                        <Square className="w-4 h-4 ml-0.5 fill-current" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="prose prose-slate max-w-none text-slate-900 font-medium leading-relaxed mb-8">
