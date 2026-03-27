@@ -14,7 +14,7 @@ export const useAgentStore = create((set, get) => ({
     // Teammates will replace this logic with actual API calls to LangGraph
     set({ status: 'processing', query: userQuery, result: null, error: null });
 
-    const agentsSequence = ['planning', 'retrieval', 'conflict', 'synthesis', 'verifier', 'persona', 'translator'];
+    const agentsSequence = ['planning', 'retrieval', 'conflict', 'synthesis', 'verifier', 'persona', 'translator', 'voice'];
     
     // Simulate error condition for testing: if query contains 'fail'
     const willFail = userQuery.toLowerCase().includes('fail') || userQuery.toLowerCase().includes('empty');
