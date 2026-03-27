@@ -26,6 +26,8 @@ class AgentState(TypedDict):
     retrieved_docs: List[Dict]
     final_answer: str
     sources: List[Dict]
+    is_valid: bool
+    evaluation_feedback: str
 
 
 
@@ -275,6 +277,10 @@ def synthesizer_node(state: AgentState) -> Dict:
         f"<user_query>{state['user_query']}</user_query>"
     )
     
+    # If there's evaluation feedback from the evaluator, include it to guide corrections
+    if state.get("evaluation_feedback"):
+        user_msg += f"\n<evaluation_feedback>Previous response had issues: {state['evaluation_feedback']}. Please fix these issues in your new response.</evaluation_feedback>"
+    
     response = llm.invoke([
         SystemMessage(content=system_prompt),
         HumanMessage(content=user_msg)
@@ -282,7 +288,40 @@ def synthesizer_node(state: AgentState) -> Dict:
     
     return {"final_answer": response.content}
 
-# --- Graph Workflow ---
+def evaluator_node(state: AgentState) -> Dict:
+    """Agent 4: Hallucination Evaluator - grades synthesizer output against retrieved context."""
+    llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+    
+    context_str = "\n".join([f"Source: {d['source']}, Page: {d['page']}\nContent: {d['content']}" for d in state["retrieved_docs"]])
+    
+    system_prompt = (
+        "You are a strict Hallucination Evaluator. Your task is to compare the draft answer against the retrieved context and determine if it contains any facts, numbers, or features not explicitly stated in the context.\n\n"
+        "OUTPUT ONLY a JSON object with this exact format:\n"
+        '{"pass": true/false, "feedback": "reasoning or corrections needed"}\n\n'
+        "If 'pass' is true, the answer adheres strictly to the context. If 'pass' is false, 'feedback' must explain what facts are hallucinated or unsupported."
+    )
+    
+    user_msg = (
+        f"<retrieved_context>\n{context_str}\n</retrieved_context>\n\n"
+        f"<draft_answer>\n{state['final_answer']}\n</draft_answer>\n\n"
+        f"Compare the draft answer to the retrieved context. Does it contain ANY facts, numbers, or features not explicitly stated?"
+    )
+    
+    response = llm.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_msg)
+    ])
+    
+    try:
+        clean_content = re.sub(r'^```json\s*|\s*```$', '', response.content.strip(), flags=re.MULTILINE)
+        evaluation = json.loads(clean_content)
+        return {
+            "is_valid": evaluation.get("pass", True),
+            "evaluation_feedback": evaluation.get("feedback", "")
+        }
+    except json.JSONDecodeError:
+        print(f"Evaluator JSON parse error: {response.content}")
+        return {"is_valid": True, "evaluation_feedback": ""}
 
 def create_graph():
     workflow = StateGraph(AgentState)
@@ -290,11 +329,22 @@ def create_graph():
     workflow.add_node("planner", planner_node)
     workflow.add_node("retriever", retriever_node)
     workflow.add_node("synthesizer", synthesizer_node)
+    workflow.add_node("evaluator", evaluator_node)
 
     workflow.set_entry_point("planner")
     workflow.add_edge("planner", "retriever")
     workflow.add_edge("retriever", "synthesizer")
-    workflow.add_edge("synthesizer", END)
+    workflow.add_edge("synthesizer", "evaluator")
+    
+    # Conditional routing: if is_valid=True go to END, else loop back to synthesizer for correction
+    def should_end(state: AgentState) -> str:
+        return "end" if state.get("is_valid", True) else "synthesizer"
+    
+    workflow.add_conditional_edges(
+        "evaluator",
+        should_end,
+        {"end": END, "synthesizer": "synthesizer"}
+    )
 
     memory = MemorySaver()
     return workflow.compile(checkpointer=memory)
