@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+langchain
+langchain-community
+langchain-groq
+langchain-huggingface
+langgraph
+pinecone>=4.0.0
+pymupdf
+pydantic
+python-dotenv
+sentence-transformers
+numpy
+rank-bm25
+
