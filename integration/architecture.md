@@ -1,45 +1,475 @@
-**Integration Guide — Architecture**
+# Integration Architecture
 
-Purpose: Provide a concise reference of the backend + frontend architecture so new developers or hackathon judges can understand components, responsibilities, and where to look in the codebase.
+This document provides a comprehensive technical overview of the Smart Knowledge Navigator backend and frontend systems, their interactions, and current deployment model.
 
-Components
-- **API (FastAPI)**: Exposes the public REST endpoint(s) used by the frontend. See [backend/main.py](backend/main.py).
-- **Agent Graph (LangGraph)**: Multi-agent orchestration (Planner, Retriever, Conflict Manager, Synthesizer, Evaluator). See [backend/graph.py](backend/graph.py).
-- **Vector Store (Pinecone)**: Stores embeddings and metadata for document retrieval. Index name and keys configured via `.env` in the backend folder.
-- **Embeddings (HuggingFace)**: `sentence-transformers/all-MiniLM-L6-v2` used to encode chunks. See [backend/ingest.py](backend/ingest.py).
-- **LLM Provider (Groq)**: Used for HyDE, query expansion, synthesis, evaluation, and conflict resolution. Models configured in `graph.py`.
-- **Document Ingest Pipeline**: `ingest.py` handles PDF parsing, chunking, metadata enrichment, and upserting to Pinecone. See [backend/ingest.py](backend/ingest.py).
-- **Frontend (Vite + React)**: UI components and pages live in the `frontend/` folder. Key files: [frontend/src/pages/RagDashboard.jsx](frontend/src/pages/RagDashboard.jsx), [frontend/src/components/AgentTrace.jsx](frontend/src/components/AgentTrace.jsx), [frontend/src/store/useAgentStore.js](frontend/src/store/useAgentStore.js).
+## System Overview
 
-Data Flow (high-level)
-1. Document ingestion (offline or admin-triggered): PDFs → `ingest.py` → embeddings → Pinecone index.
-2. User query via frontend → `POST /api/v1/query` on FastAPI backend.
-3. Backend builds an `AgentState` and executes the LangGraph `app_graph`:
-   - Planner: HyDE + query expansion
-   - Retriever: hybrid semantic + BM25 retrieval
-   - Conflict Manager: detect and prioritize by timestamp
-   - Synthesizer: generate final answer with citations
-   - Evaluator: validate and, if needed, loop back to Synthesizer
-4. Final JSON response returned to frontend with `answer`, `sources`, `thread_id`, and any `evaluation_feedback` or `conflict_resolution_notes`.
+The system is a multi-agent Retrieval-Augmented Generation (RAG) pipeline built on LangGraph with Groq LLM, Pinecone vector database, and HuggingFace embeddings. It ingests enterprise documents (PDFs), synthesizes answers to user queries using multiple validation layers, and maintains conversation history across sessions.
 
-Important environment variables
-- Copy `.env.example` to `.env` in the `backend/` folder and fill keys:
-  - `GROQ_API_KEY` — Groq API key
-  - `PINECONE_API_KEY` — Pinecone API key
-  - `PINECONE_INDEX_NAME` — index name (e.g., `gdghackathon`)
-  - `EMBEDDING_MODEL_NAME` — e.g., `sentence-transformers/all-MiniLM-L6-v2`
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Frontend (React + Vite)                      │
+│  - RagDashboard.jsx: Query interface and conversation display       │
+│  - AgentTrace.jsx: Debug panel for agent execution visibility       │
+│  - useAgentStore.js: Zustand store for thread_id and history       │
+└─────────────────────────────────────────────────┬───────────────────┘
+                                                  │ HTTP/JSON
+                                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   FastAPI Backend (main.py)                          │
+│  - POST /api/v1/query: Query processing endpoint                   │
+│  - POST /api/v1/ingest: Document upload and ingestion endpoint     │
+│  - Request validation and state initialization                      │
+└─────────────────────────────────────────────┬───────────────────────┘
+                                              │ State Graph
+                                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│            LangGraph Multi-Agent Orchestration (graph.py)           │
+│                                                                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
+│  │ Planner  │→ │Retriever │→ │ Conflict │→ │Synthesizer
+│  │          │  │          │  │ Manager  │  │          │            │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘            │
+│       ↓              ↓              ↓              ↓                │
+│     HyDE        Semantic +        Timestamp    Citation            │
+│   Generation    BM25 Hybrid       Detection    Formatting          │
+│                                                    ↓                │
+│                                              ┌──────────┐           │
+│                                              │Evaluator │           │
+│                                              └─────┬────┘           │
+│                                                    │                │
+│                                   Valid?    Yes → End              │
+│                                   No ↓ Loop back to Synthesizer    │
+│                                                                      │
+│  State flows through: Annotated[List, add_messages] for history   │
+│  Persistence: MemorySaver checkpointer with thread_id key         │
+└─────────────────────────────────────────────────────────────────────┘
+                        │         │         │
+                        ▼         ▼         ▼
+     ┌──────────────┬──────────┬──────────────┐
+     │              │          │              │
+  ┌────────┐  ┌──────────┐  ┌────────┐   ┌────────────────┐
+  │ Groq   │  │HuggingFace│ │Pinecone│   │ LangGraph      │
+  │ LLM    │  │Embeddings │ │Vector  │   │ MemorySaver    │
+  │(Llama  │  │(all-MinML │ │Database│   │(Checkpointing)│
+  │3.3-70b)│  │L6-v2)     │ │        │   │                │
+  └────────┘  └──────────┘  └────────┘   └────────────────┘
+```
 
-Files of interest (entry points)
-- Backend API: [backend/main.py](backend/main.py)
-- Agent graph & nodes: [backend/graph.py](backend/graph.py)
-- Ingest pipeline: [backend/ingest.py](backend/ingest.py)
-- Frontend dashboard: [frontend/src/pages/RagDashboard.jsx](frontend/src/pages/RagDashboard.jsx)
+## Core Components
 
-Deployment notes
-- Local: run the FastAPI app (`uvicorn main:app --reload`) from the `backend` folder.
-- Docker: recommended to dockerize the backend and ensure environment variables are passed securely.
-- Pinecone: use a production index and monitor usage to avoid throttling.
+### 1. FastAPI Backend (`backend/main.py`)
 
-Security & production considerations
-- Do not commit keys to source control. Use environment variables or secret manager.
-- Add rate limiting and authentication for public deployments.
+**Responsibilities:**
+- REST API endpoint handling and request validation
+- Pydantic schema definitions for type safety
+- State initialization before graph execution
+- Response formatting and error handling
+
+**Key Models:**
+```python
+class QueryRequest(BaseModel):
+    query: str
+    persona: str = "Standard User"
+    language: str = "English"
+    thread_id: str = <auto-generated UUID>
+
+class QueryResponse(BaseModel):
+    status: str                      # "success" or "partial_success"
+    answer: str
+    sources: List[Source]
+    thread_id: str
+
+class IngestResponse(BaseModel):
+    status: str                      # "success" or "failed"
+    message: str
+    vectors_upserted: int
+    documents_processed: int
+    errors: List[str] | None
+```
+
+**Endpoint Initialization:**
+When a query arrives, the backend creates an `AgentState` with empty state fields and passes it to the LangGraph executor with a config specifying the thread_id:
+
+```python
+initial_state = {
+    "messages": [],                  # Populated by MemorySaver if thread exists
+    "user_query": request.query,
+    "persona": request.persona,
+    "language": request.language,
+    "hypothetical_document": "",
+    "search_query": "",
+    "filters": {},
+    "retrieved_docs": [],
+    "final_answer": "",
+    "sources": [],
+    "is_valid": False,
+    "evaluation_feedback": "",
+    "conflict_resolution_notes": ""
+}
+
+config = {"configurable": {"thread_id": request.thread_id}}
+result = await app_graph.ainvoke(initial_state, config=config)
+```
+
+The `thread_id` enables MemorySaver to load previous messages if they exist, creating conversation continuity.
+
+### 2. LangGraph Agent Orchestration (`backend/graph.py`)
+
+**State Definition:**
+```python
+class AgentState(TypedDict):
+    messages: Annotated[List, add_messages]        # Conversation history
+    user_query: str                                 # Original user question
+    persona: str                                    # Tone/style modifier
+    language: str                                   # Target output language
+    hypothetical_document: str                      # HyDE output
+    search_query: str                               # Final optimized query
+    filters: Dict                                   # Metadata filters (category)
+    retrieved_docs: List[Dict]                      # Search results
+    final_answer: str                               # Synthesized response
+    sources: List[Dict]                             # Citation metadata
+    is_valid: bool                                  # Evaluator pass/fail
+    evaluation_feedback: str                        # Correction instructions
+    conflict_resolution_notes: str                  # Conflict manager output
+```
+
+**The Five-Agent Pipeline:**
+
+#### Agent 1: Planner (`planner_node`)
+**Purpose:** Optimize the user's query for retrieval by generating multiple perspectives of what documents should contain.
+
+**Process:**
+1. Calls Groq with system prompt to generate HyDE (Hypothetical Document Embeddings)
+2. HyDE creates a 200+ word technical document that would answer the query
+3. Extracts 2 alternative query phrasings to improve retrieval diversity
+4. Categorizes the query as "Technical", "Commercial", "Support", or null
+
+**Output Structure:**
+```json
+{
+  "hypothetical_document": "The PowerEdge R760 supports up to 6TB of DRAM...",
+  "filters": {"category": "Technical"},
+  "query_variations": [
+    "What is the maximum memory capacity for R760?",
+    "R760 RAM configuration specifications"
+  ]
+}
+```
+
+**LLM Config:** temperature=0 (deterministic), model=`llama-3.3-70b-versatile`
+
+#### Agent 2: Retriever (`retriever_node`)
+**Purpose:** Execute hybrid search combining semantic similarity and keyword matching, then re-rank results.
+
+**Process:**
+1. Embeds all three queries (original + 2 variations) using HuggingFace model
+2. Queries Pinecone with each embedding (k=15 per query)
+3. Deduplicates results by source+page combination
+4. Computes BM25 keyword scores on the full text corpus
+5. Combines scores: `final_score = (0.7 * semantic_score) + (0.3 * bm25_score)`
+6. Returns top-5 documents with full metadata and text preview
+
+**Deduplication Example:**
+```python
+seen = set()
+unique_docs = []
+for doc in retrieved_results:
+    key = (doc['source'], doc['page_number'])
+    if key not in seen:
+        seen.add(key)
+        unique_docs.append(doc)
+# Returns top 5 from unique_docs
+```
+
+**Metadata Attached to Retrieved Docs:**
+- `source`: PDF filename
+- `page_number`: Page in document
+- `timestamp`: Unix timestamp from ingestion (used by Conflict Manager)
+- `category`: Classification tag
+- `text`: Preview (first 500 chars)
+
+#### Agent 3: Conflict Manager (`conflict_manager_node`)
+**Purpose:** Detect contradictions across retrieved documents using timestamp metadata as a tiebreaker.
+
+**Process:**
+1. Formats all retrieved documents with their timestamp and source
+2. Calls Groq with prompt to identify contradictions
+3. Prioritizes by most recent timestamp (higher timestamp = more recent)
+4. For each contradiction, specifies which document to trust
+
+**Conflict Detection Example:**
+```
+Input Documents:
+[Timestamp: 1704067200] "PowerEdge R760 max RAM: 4TB"
+[Timestamp: 1711929600] "PowerEdge R760 max RAM: 6TB"
+
+Output:
+"CONFLICT DETECTED: The specifications for PowerEdge R760 maximum RAM differ.
+Document from 2024-03-31 (timestamp: 1711929600) specifies 6TB as the maximum.
+This is newer and supersedes the 4TB specification from 2024-01-01.
+RESOLUTION: Use the 6TB specification from the latest document."
+```
+
+**Output:**
+- If conflicts found: Specific resolution instructions
+- If no conflicts: `"No conflicts detected."`
+
+**Stored in State:** `conflict_resolution_notes`
+
+#### Agent 4: Synthesizer (`synthesizer_node`)
+**Purpose:** Synthesize a final answer that follows conflict resolution directives, adapts to persona/language, and includes inline citations.
+
+**Process:**
+1. Constructs prompt including:
+   - Retrieved documents with full text
+   - User's original query
+   - Conflict resolution notes (if present)
+   - Persona and language requirements
+   - All conversation history (from `messages`)
+2. Calls Groq with Chain-of-Thought reasoning
+3. Extracts answer from `<answer>` XML tags
+4. Parses citations in format: `[Source: filename.pdf, Page: X]`
+5. Returns structured answer with inline citations
+
+**Persona Adaptation:**
+```python
+# Persona modifies instruction 3 of the prompt:
+if persona == "Enthusiastic Tech Salesperson":
+    "Format your answer as an exciting pitch with benefits..."
+elif persona == "Technical Expert":
+    "Provide technical depth with architecture diagrams..."
+```
+
+**Language Translation:**
+The synthesizer prompt includes:
+```
+"Respond in {language}. If not English, provide clear translations."
+```
+
+**Citation Format:**
+```
+"The PowerEdge R760 supports up to 6TB of DRAM [Source: poweredge-r760-spec-sheet.pdf, Page: 3], 
+which is sufficient for demanding workloads."
+```
+
+**LLM Config:** temperature=0.2 (slight randomness), model=`llama-3.3-70b-versatile`
+
+#### Agent 5: Evaluator (`evaluator_node`)
+**Purpose:** Validate the synthesized answer against hallucinations by checking if claims are supported by retrieved documents.
+
+**Process:**
+1. Extracts all factual claims from the synthesized answer
+2. Checks each claim against the full text of retrieved documents
+3. Validates JSON structure of output
+4. Returns: `{"pass": bool, "feedback": str}`
+
+**Validation Logic:**
+```python
+try:
+    # Parse response as JSON
+    result = json.loads(evaluator_response)
+    if result.get("pass") and isinstance(result.get("feedback"), str):
+        return {"is_valid": True, "evaluation_feedback": ""}
+    else:
+        return {
+            "is_valid": False,
+            "evaluation_feedback": result.get("feedback", "Invalid claims detected")
+        }
+except:
+    return {"is_valid": False, "evaluation_feedback": "Response format error"}
+```
+
+**If Validation Fails (is_valid=False):**
+The graph loops back to `synthesizer_node` with the evaluation feedback, allowing it to self-correct.
+
+**Retry Loop Example:**
+```
+First Pass (Synthesizer):
+Answer: "Supports up to 8TB RAM"
+Evaluator: {"pass": false, "feedback": "Max RAM is 6TB per docs, not 8TB"}
+
+Second Pass (Synthesizer with feedback):
+Answer: "Supports up to 6TB RAM"
+Evaluator: {"pass": true, "feedback": ""}
+Result: END
+```
+
+**LLM Config:** temperature=0 (deterministic), model=`llama-3.3-70b-versatile`
+
+### 3. Pinecone Vector Store
+
+**Index Configuration:**
+- Index Name: `gdghackathon` (from `.env`)
+- Dimension: 384 (for all-MiniLM-L6-v2)
+- Metric: Cosine similarity
+- Spec: Serverless (AWS us-east-1)
+
+**Metadata Structure (stored with each vector):**
+```json
+{
+  "source": "poweredge-r760-spec-sheet.pdf",
+  "page_number": 3,
+  "category": "Technical",
+  "timestamp": 1711929600,
+  "text": "First 500 characters of chunk preview..."
+}
+```
+
+**Chunk ID Format:**
+```
+chunk_{timestamp}_{index}
+Example: chunk_1711929600_42
+```
+
+Unique timestamp-based IDs prevent collisions when re-ingesting updated documents.
+
+### 4. Embedding Model
+
+**Model:** `sentence-transformers/all-MiniLM-L6-v2`
+- Dimension: 384
+- Purpose: Encode both document chunks and user queries into vector space
+- Used in: Planner (HyDE), Retriever (query encoding), Ingest pipeline
+- Average inference: ~50ms for typical query
+
+### 5. LLM Provider (Groq)
+
+**Model:** `llama-3.3-70b-versatile`
+- Context Window: 8192 tokens
+- Used for:
+  - HyDE generation (Planner)
+  - Query variation generation (Planner)
+  - Conflict detection (Conflict Manager)
+  - Answer synthesis (Synthesizer)
+  - Hallucination checking (Evaluator)
+- API Rate Limits: Check Groq dashboard; typically sufficient for development
+
+**Temperature Settings:**
+- Planner: 0 (deterministic)
+- Retriever: N/A (no LLM)
+- Conflict Manager: 0 (deterministic)
+- Synthesizer: 0.2 (slight variation for natural language)
+- Evaluator: 0 (deterministic validation)
+
+### 6. Document Ingestion Pipeline (`backend/ingest.py`)
+
+**Entry Point:** `ingest_from_files(files: List[tuple], data_dir: str = None) -> Dict`
+
+**Processing Steps:**
+
+1. **File Storage:**
+   - Accept file tuples: `(filename, file_bytes)`
+   - Write to temporary directory (auto-cleaned after processing)
+   - Validate `.pdf` extension
+
+2. **PDF Parsing:**
+   - Use PyMuPDFLoader for layout-preserving extraction
+   - Preserve page numbers and metadata
+
+3. **Text Chunking:**
+   - RecursiveCharacterTextSplitter with:
+     - chunk_size: 1000 tokens
+     - chunk_overlap: 200 tokens
+     - Separators: `["\n\n", "\n", ".", " ", ""]`
+   - Maintains semantic coherence across chunk boundaries
+
+4. **Metadata Enrichment:**
+   ```python
+   metadata = {
+       "source": filename,
+       "category": get_category_tag(filename),  # ML-based classification
+       "timestamp": current_unix_time,
+       "page_number": page_from_pdf,
+   }
+   ```
+
+5. **Embedding & Vector Creation:**
+   - Encode each chunk text using HuggingFace model
+   - Create vector tuple: `(chunk_id, embedding, metadata)`
+
+6. **Batch Upsert:**
+   - Send in batches of 100 vectors to Pinecone
+   - Pinecone handles deduplication on upsert (matching chunk_id overwrites)
+
+**Category Tagging Logic:**
+```python
+def get_category_tag(filename: str) -> str:
+    technical_keywords = ["spec", "architecture", "hardware", "api", ...]
+    sales_keywords = ["pricing", "license", "sla", "benefits", ...]
+    support_keywords = ["troubleshoot", "faq", "install", "guide", ...]
+    
+    # Count keyword matches and return highest scorer
+    # Returns: "Technical", "Commercial", "Support", or "General"
+```
+
+**Response Example:**
+```json
+{
+  "status": "success",
+  "message": "Successfully ingested 342 vectors",
+  "vectors_upserted": 342,
+  "documents_processed": 2,
+  "errors": null
+}
+```
+
+### 7. Frontend Application (`frontend/` with React + Vite)
+
+**Key Files and Responsibilities:**
+
+#### `frontend/src/pages/RagDashboard.jsx`
+- Renders main query input interface
+- Displays conversation history
+- Manages `thread_id` state (passed to Zustand store)
+- Sends requests to `/api/v1/query`
+- Renders sources as expandable cards
+- Shows conflict/evaluation badges
+
+#### `frontend/src/components/AgentTrace.jsx`
+- Optional debug panel (hidden by default)
+- Displays agent execution metadata:
+  - HyDE hypothetical document
+  - Retrieved chunk IDs and scores
+  - Conflict manager output
+  - Evaluator feedback
+  - Used for hackathon demonstrations
+
+#### `frontend/src/store/useAgentStore.js`
+- Zustand store for global state
+- Persists `thread_id` across page refreshes (localStorage)
+- Maintains conversation history
+- Tracks loading/error states
+
+## Environment Configuration
+
+**Required `.env` file in `backend/` folder:**
+```bash
+GROQ_API_KEY=gsk_xxx...
+PINECONE_API_KEY=xxx...
+PINECONE_INDEX_NAME=gdghackathon
+EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+ORGANIZATION_NAME=Enterprise  # Optional
+```
+
+## Deployment Model (Current)
+
+### Local Development
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+pip install -r requirements.txt
+
+# Terminal 1: FastAPI server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2: Frontend dev server
+cd frontend
+npm run dev
+```
+
+### Production Readiness
+- FastAPI backend can be deployed via Uvicorn on any Linux server
+- Frontend built with `npm run build` produces static assets
+- Pinecone as managed service (no self-hosting required)
+- All secrets managed via environment variables or CI/CD secrets
