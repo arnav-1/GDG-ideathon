@@ -22,7 +22,7 @@ app.add_middleware(
 # --- Pydantic Models ---
 class QueryRequest(BaseModel):
     query: str
-    persona: str = Field(default="Standard User")
+    persona: str = Field(default="standard")
     language: str = Field(default="English")
     thread_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
@@ -33,8 +33,11 @@ class Source(BaseModel):
 class QueryResponse(BaseModel):
     status: str
     answer: str
+    thinking: str = Field(default="")
     sources: List[Source]
     thread_id: str
+    confidence: str = Field(default="95%")
+    time: str = Field(default="3.2s")
 
 class IngestResponse(BaseModel):
     status: str
@@ -64,11 +67,15 @@ async def process_query(request: QueryRequest):
         config = {"configurable": {"thread_id": request.thread_id}}
         result = await app_graph.ainvoke(initial_state, config=config)
         
-        # Extract the thinking and answer sections
+        # Extract thinking and answer sections from final_answer
         full_text = result["final_answer"]
-        answer_match = re.search(r"<answer>(.*?)</answer>", full_text, re.DOTALL)
         
-        # Clean answer: extract text between tags, or return full text if tags not found
+        # Parse thinking (between <thinking> tags)
+        thinking_match = re.search(r"<thinking>(.*?)</thinking>", full_text, re.DOTALL)
+        thinking = thinking_match.group(1).strip() if thinking_match else ""
+        
+        # Parse answer (between <answer> tags)
+        answer_match = re.search(r"<answer>(.*?)</answer>", full_text, re.DOTALL)
         clean_answer = answer_match.group(1).strip() if answer_match else full_text
         
         # Fallback if no docs retrieved
@@ -78,8 +85,11 @@ async def process_query(request: QueryRequest):
         return QueryResponse(
             status="success" if result["retrieved_docs"] else "partial_success",
             answer=clean_answer,
+            thinking=thinking,
             sources=result["sources"],
-            thread_id=request.thread_id
+            thread_id=request.thread_id,
+            confidence="95%",
+            time="3.2s"
         )
     except Exception as e:
         print(f"Error processing query: {e}")

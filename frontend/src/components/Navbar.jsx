@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../store/useAuthStore';
 import LanguageSelector from './LanguageSelector';
+import PersonaSelector from './PersonaSelector';
 
 export default function Navbar() {
   const location = useLocation();
@@ -53,6 +54,7 @@ export default function Navbar() {
             )}
           </div>
           <div className="flex items-center gap-3 border-l border-slate-200 pl-6 border-y-0 border-r-0">
+            <PersonaSelector />
             <LanguageSelector />
             {!user ? (
                <>

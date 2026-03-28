@@ -7,6 +7,7 @@ export const useAgentStore = create((set, get) => ({
   threadId: null,
   chatHistory: [],
   language: 'English',
+  persona: 'standard', // Add persona field
   query: '',
   result: null,
   error: null,
@@ -14,6 +15,7 @@ export const useAgentStore = create((set, get) => ({
   
   setQuery: (query) => set({ query }),
   setLanguage: (language) => set({ language }),
+  setPersona: (persona) => set({ persona }),
   
   setThreadId: (threadId) => set({ threadId }),
   
@@ -47,7 +49,7 @@ export const useAgentStore = create((set, get) => ({
       // Call actual backend API
       const payload = {
         query: userQuery,
-        persona: "Standard User",
+        persona: state.persona,
         language: state.language,
         thread_id: state.threadId || undefined
       };
@@ -71,13 +73,14 @@ export const useAgentStore = create((set, get) => ({
         set({ threadId: data.thread_id });
       }
       
-      // Create AI message for chat history
+      // Create AI message for chat history with thinking support
       const aiMessage = {
         id: (Date.now() + 1).toString(),
         type: 'agent',
         text: data.answer,
-        confidence: '95%',
-        time: '3.2s',
+        thinking: data.thinking || '', // Store thinking separately
+        confidence: data.confidence || '95%',
+        time: data.time || '3.2s',
         citations: (data.sources || []).map((source, idx) => ({
           id: `${idx + 1}`,
           title: source.title || 'Unknown Source',

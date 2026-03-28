@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import AgentTrace from '../components/AgentTrace';
 import Navbar from '../components/Navbar';
 import { useAgentStore } from '../store/useAgentStore';
-import { Send, FileText, Anchor, FileQuestion, Play, Pause, Square, Paperclip, Mic } from 'lucide-react';
+import { Send, FileText, Anchor, FileQuestion, Play, Pause, Square, Paperclip, Mic, ChevronDown, CheckCircle2, Brain } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const LANGUAGES = {
@@ -22,8 +22,43 @@ function Citation({ tag }) {
   );
 }
 
+function ThinkingSection({ thinking, isExpanded, onToggle }) {
+  return (
+    <div className="mb-4">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-gradient-to-r from-[#0076CE]/5 to-[#0076CE]/0 border border-[#0076CE]/20 hover:border-[#0076CE]/40 transition-all group"
+      >
+        <div className="flex items-center gap-2">
+          <Brain className="w-4 h-4 text-[#0076CE] group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-semibold text-[#0076CE]">Reasoning Trace</span>
+          <span className="text-xs text-slate-500">({thinking.split('\n').length} steps)</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-[#0076CE] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+      </button>
+      
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mt-2 bg-slate-50/50 border border-slate-200/50 rounded-lg p-4 overflow-hidden"
+          >
+            <div className="text-sm text-slate-700 font-mono whitespace-pre-wrap leading-relaxed text-[13px] max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+              {thinking}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function RagDashboard() {
   const [localQuery, setLocalQuery] = useState('');
+  const [expandedThinking, setExpandedThinking] = useState({});
   const messagesEndRef = useRef(null);
   
   // Get real data from Zustand store
@@ -142,7 +177,7 @@ export default function RagDashboard() {
                       className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       {msg.type === 'user' ? (
-                        <div className="bg-slate-100 text-slate-900 border border-slate-200 rounded-2xl rounded-tr-sm shadow-sm px-5 py-3.5 max-w-[85%]">
+                        <div className="bg-gradient-to-br from-[#0076CE]/15 to-[#0076CE]/5 text-slate-900 border border-[#0076CE]/20 rounded-2xl rounded-tr-sm shadow-sm px-5 py-3.5 max-w-[85%]">
                           <p className="font-medium text-[15px]">{msg.text}</p>
                         </div>
                       ) : (
@@ -150,7 +185,7 @@ export default function RagDashboard() {
                           <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-100">
                             <div className="flex items-center gap-2.5">
                               <div className="bg-[#0076CE] p-1.5 rounded-lg text-white shadow-md">
-                                <CheckIcon />
+                                <CheckCircle2 className="w-4 h-4" />
                               </div>
                               <h3 className="text-base font-bold tracking-tight text-slate-900">Verified Answer</h3>
                               <span className="text-xs text-slate-400 font-mono ml-2 border-l border-slate-200 pl-3">
@@ -181,6 +216,17 @@ export default function RagDashboard() {
                               </button>
                             </div>
                           </div>
+
+                          {msg.thinking && (
+                            <ThinkingSection 
+                              thinking={msg.thinking}
+                              isExpanded={expandedThinking[msg.id]}
+                              onToggle={() => setExpandedThinking(prev => ({
+                                ...prev,
+                                [msg.id]: !prev[msg.id]
+                              }))}
+                            />
+                          )}
 
                           <div className="prose prose-slate max-w-none text-slate-800 font-medium leading-relaxed mb-6 text-[15px]">
                             <p>{msg.text}</p>
