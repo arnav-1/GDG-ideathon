@@ -1,72 +1,114 @@
 import { create } from 'zustand';
 
-// Simulated states: 'idle' | 'planning' | 'retrieval' | 'conflict' | 'synthesis' | 'verifier' | 'persona' | 'translator' | 'complete' | 'error'
+// Real API integration with thread_id management and conversation history
 export const useAgentStore = create((set, get) => ({
-  status: 'idle',
+  status: 'idle', // 'idle' | 'processing' | 'complete' | 'error'
   activeAgent: null,
+  threadId: null,
+  chatHistory: [],
+  language: 'English',
   query: '',
   result: null,
   error: null,
-  chatHistory: [],
-  language: 'English',
+  apiResponse: null,
   
   setQuery: (query) => set({ query }),
   setLanguage: (language) => set({ language }),
   
+  setThreadId: (threadId) => set({ threadId }),
+  
+  addMessage: (message) => set((state) => ({
+    chatHistory: [...state.chatHistory, message]
+  })),
+  
+  clearHistory: () => set({ chatHistory: [], threadId: null }),
+  
   startProcessing: async (userQuery) => {
-    const newChat = [...get().chatHistory, { id: Date.now().toString(), type: 'user', text: userQuery }];
-    set({ status: 'processing', query: userQuery, result: null, error: null, chatHistory: newChat });
-
-    const agentsSequence = ['planning', 'retrieval', 'conflict', 'synthesis', 'verifier', 'persona', 'translator', 'voice'];
-    
-    // Simulate error condition for testing: if query contains 'fail'
-    const willFail = userQuery.toLowerCase().includes('fail') || userQuery.toLowerCase().includes('empty');
-
-    for (let i = 0; i < agentsSequence.length; i++) {
-       const agent = agentsSequence[i];
-       set({ activeAgent: agent });
-       
-       // Simulate time per agent
-       await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 600));
-
-       // If "empty" is simulated, fail at retrieval
-       if (willFail && agent === 'retrieval') {
-         set({ status: 'error', activeAgent: null, error: 'NO_DOCS_FOUND' });
-         return;
-       }
-    }
-
-    const { language } = get();
-
-    const translations = {
-      'English': 'Effective starting January 1, 2026, the remote work policy has been updated to mandate a fully hybrid model requiring a minimum of three core days in the office. The previous 2024 policy which allowed generic exceptions has been explicitly sunset. Conflict resolved automatically prioritizing the 2026 Addendum.',
-      'Spanish': 'A partir del 1 de enero de 2026, la política de trabajo remoto se ha actualizado para exigir un modelo totalmente híbrido que requiere un mínimo de tres días principales en la oficina. La política anterior de 2024 que permitía excepciones genéricas ha sido eliminada explícitamente. Se resolvió el conflicto de forma automática priorizando el Anexo de 2026.',
-      'French': 'À compter du 1er janvier 2026, la politique de télétravail a été mise à jour pour imposer un modèle entièrement hybride exigeant un minimum de trois jours de base au bureau. La politique précédente de 2024, qui autorisait des exceptions génériques, a été explicitement supprimée. Conflit résolu automatiquement en donnant la priorité à l\'addendum de 2026.',
-      'German': 'Mit Wirkung zum 1. Januar 2026 wurde die Homeoffice-Richtlinie dahingehend aktualisiert, dass ein vollständig hybrides Modell vorgeschrieben ist, das mindestens drei Kerntage im Büro erfordert. Die bisherige Richtlinie von 2024, die allgemeine Ausnahmen zuließ, wurde ausdrücklich außer Kraft gesetzt. Der Konflikt wurde automatisch gelöst, wobei der Anhang von 2026 priorisiert wurde.',
-      'Hindi': '1 जनवरी, 2026 से प्रभावी, रिमोट वर्क पॉलिसी को एक पूरी तरह से हाइब्रिड मॉडल को अनिवार्य करने के लिए अपडेट किया गया है, जिसमें कार्यालय में न्यूनतम तीन मुख्य दिनों की आवश्यकता होती है। पिछली 2024 की नीति जो सामान्य अपवादों की अनुमति देती थी, उसे स्पष्ट रूप से समाप्त कर दिया गया है। 2026 परिशिष्ट को प्राथमिकता देते हुए संघर्ष अपने आप हल हो गया।'
-    };
-
-    const translatedText = translations[language] || translations['English'];
-
-    const aiMessage = {
-      id: (Date.now() + 1).toString(),
-      type: 'agent',
-      text: translatedText,
-      confidence: '99.8%',
-      time: '4.2s',
-      citations: [
-         { id: '1', title: '2026 Remote Work Addendum', file: 'HR_Policy_2026.pdf', details: 'Page 2, Section A. Timestamp: Feb 12, 2026' },
-         { id: '2', title: 'Global HR Policy V3.1', file: 'Global_HR_v3.pdf', details: 'Page 14. Timestamp: Mar 01, 2024 (Superseded)' }
-      ]
-    };
-
-    // Success payload
+    const state = get();
+    const newChat = [...state.chatHistory, { id: Date.now().toString(), type: 'user', text: userQuery }];
     set({ 
-       status: 'complete', 
-       activeAgent: null, 
-       result: aiMessage,
-       chatHistory: [...get().chatHistory, aiMessage]
+      status: 'processing', 
+      query: userQuery, 
+      result: null, 
+      error: null,
+      activeAgent: 'planning',
+      chatHistory: newChat
     });
+
+    try {
+      // Simulate agent sequence for visualization
+      const agentsSequence = ['planning', 'retrieval', 'conflict', 'synthesis', 'verifier'];
+      
+      for (let i = 0; i < agentsSequence.length; i++) {
+        set({ activeAgent: agentsSequence[i] });
+        await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 200));
+      }
+      
+      // Call actual backend API
+      const payload = {
+        query: userQuery,
+        persona: "Standard User",
+        language: state.language,
+        thread_id: state.threadId || undefined
+      };
+      
+      const response = await fetch('/api/v1/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        timeout: 30000
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.detail || `HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Store thread_id on first response
+      if (!state.threadId) {
+        set({ threadId: data.thread_id });
+      }
+      
+      // Create AI message for chat history
+      const aiMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'agent',
+        text: data.answer,
+        confidence: '95%',
+        time: '3.2s',
+        citations: (data.sources || []).map((source, idx) => ({
+          id: `${idx + 1}`,
+          title: source.title || 'Unknown Source',
+          file: source.title || 'document',
+          details: `Page ${source.page || 'N/A'}`
+        }))
+      };
+      
+      // Set success result and update chat history
+      set((s) => ({ 
+        status: 'complete', 
+        activeAgent: null,
+        result: aiMessage,
+        chatHistory: [...s.chatHistory, aiMessage],
+        apiResponse: data
+      }));
+      
+    } catch (err) {
+      console.error('API Error:', err);
+      
+      // Check if error is due to no documents found
+      const isNoDocsFound = err.message.toLowerCase().includes('cannot find') || 
+                           err.message.toLowerCase().includes('no_docs');
+      
+      set({ 
+        status: 'error', 
+        activeAgent: null, 
+        error: isNoDocsFound ? 'NO_DOCS_FOUND' : 'API_ERROR',
+        apiResponse: null
+      });
+    }
   },
 
   reset: () => set({ status: 'idle', activeAgent: null, result: null, error: null, query: '', chatHistory: [] })

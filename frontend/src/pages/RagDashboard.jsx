@@ -26,6 +26,7 @@ export default function RagDashboard() {
   const [localQuery, setLocalQuery] = useState('');
   const messagesEndRef = useRef(null);
   
+  // Get real data from Zustand store
   const { status, error, startProcessing, chatHistory, language } = useAgentStore();
 
   const isProcessing = status === 'processing';
