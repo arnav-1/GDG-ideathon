@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import AgentTrace from '../components/AgentTrace';
 import Navbar from '../components/Navbar';
 import { useAgentStore } from '../store/useAgentStore';
-import { Send, FileText, Anchor, FileQuestion, Play, Pause, Square, Paperclip, Mic, ChevronDown, CheckCircle2, Brain } from 'lucide-react';
+import { Send, FileText, Anchor, FileQuestion, Play, Pause, Square, Paperclip, Mic, ChevronDown, CheckCircle2, Brain, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const LANGUAGES = {
@@ -56,9 +56,44 @@ function ThinkingSection({ thinking, isExpanded, onToggle }) {
   );
 }
 
+function EvaluationSection({ evaluation, isExpanded, onToggle }) {
+  return (
+    <div className="mb-4">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 hover:border-green-300 transition-all group"
+      >
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-green-600 group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-semibold text-green-700">Verification</span>
+          <span className="text-xs text-green-600 font-medium">✓ Verified</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-green-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+      </button>
+      
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mt-2 bg-green-50/50 border border-green-200/50 rounded-lg p-4 overflow-hidden"
+          >
+            <div className="text-sm text-green-800 leading-relaxed text-[13px] max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-green-300 scrollbar-track-transparent">
+              {evaluation}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function RagDashboard() {
   const [localQuery, setLocalQuery] = useState('');
   const [expandedThinking, setExpandedThinking] = useState({});
+  const [expandedEvaluation, setExpandedEvaluation] = useState({});
   const messagesEndRef = useRef(null);
   
   // Get real data from Zustand store
@@ -222,6 +257,17 @@ export default function RagDashboard() {
                               thinking={msg.thinking}
                               isExpanded={expandedThinking[msg.id]}
                               onToggle={() => setExpandedThinking(prev => ({
+                                ...prev,
+                                [msg.id]: !prev[msg.id]
+                              }))}
+                            />
+                          )}
+
+                          {msg.evaluation && (
+                            <EvaluationSection 
+                              evaluation={msg.evaluation}
+                              isExpanded={expandedEvaluation[msg.id]}
+                              onToggle={() => setExpandedEvaluation(prev => ({
                                 ...prev,
                                 [msg.id]: !prev[msg.id]
                               }))}

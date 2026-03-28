@@ -79,6 +79,7 @@ export const useAgentStore = create((set, get) => ({
         type: 'agent',
         text: data.answer,
         thinking: data.thinking || '', // Store thinking separately
+        evaluation: data.evaluation || '', // Store evaluation separately
         confidence: data.confidence || '95%',
         time: data.time || '3.2s',
         citations: (data.sources || []).map((source, idx) => ({

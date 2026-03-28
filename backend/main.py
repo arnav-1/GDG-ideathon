@@ -34,6 +34,7 @@ class QueryResponse(BaseModel):
     status: str
     answer: str
     thinking: str = Field(default="")
+    evaluation: str = Field(default="")  # Evaluator feedback
     sources: List[Source]
     thread_id: str
     confidence: str = Field(default="95%")
@@ -81,6 +82,9 @@ async def process_query(request: QueryRequest):
         # Remove any remaining tags from answer
         clean_answer = re.sub(r"</?thinking>|</?answer>", "", clean_answer, flags=re.IGNORECASE).strip()
         
+        # Extract evaluator feedback
+        evaluation_feedback = result.get("evaluation_feedback", "Answer verified against source documents.")
+        
         # Fallback if no docs retrieved
         if not result["retrieved_docs"]:
             clean_answer = "I cannot find sufficient information in the provided knowledge base to answer this query."
@@ -89,6 +93,7 @@ async def process_query(request: QueryRequest):
             status="success" if result["retrieved_docs"] else "partial_success",
             answer=clean_answer,
             thinking=thinking,
+            evaluation=evaluation_feedback,
             sources=result["sources"],
             thread_id=request.thread_id,
             confidence="95%",
