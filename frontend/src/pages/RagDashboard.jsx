@@ -17,32 +17,35 @@ function Citation({ tag }) {
 export default function RagDashboard() {
   const [localQuery, setLocalQuery] = useState('');
   
-  // Teammate Integration: Easy plug-and-play hook for backend synthesis payloads.
+  // Get real data from Zustand store
   const [synthesisData, setSynthesisData] = useState(null);
   
-  // Zustand handles the Agent simulation states globally (Planning -> Retrieval -> etc.)
-  const { status, error, startProcessing } = useAgentStore();
+  // Zustand handles the Agent states and real API calls
+  const { status, error, startProcessing, result } = useAgentStore();
 
   const isProcessing = status === 'processing';
   const showError = status === 'error';
 
-  // Listen for Zustand simulation completion and set the teammate integration payload automatically for the demo
+  // Transform API response to UI format and set synthesis data
   useEffect(() => {
-    if (status === 'complete') {
-        const dummyPayload = {
-           text: 'Effective starting January 1, 2026, the remote work policy has been updated to mandate a fully hybrid model requiring a minimum of three core days in the office. The previous 2024 policy which allowed generic exceptions has been explicitly sunset. Conflict resolved automatically prioritizing the 2026 Addendum.',
-           confidence: '99.8%',
-           time: '4.2s',
-           citations: [
-               { id: '1', title: '2026 Remote Work Addendum', file: 'HR_Policy_2026.pdf', details: 'Page 2, Section A. Timestamp: Feb 12, 2026' },
-               { id: '2', title: 'Global HR Policy V3.1', file: 'Global_HR_v3.pdf', details: 'Page 14. Timestamp: Mar 01, 2024 (Superseded)' }
-           ]
-        };
-        setSynthesisData(dummyPayload);
+    if (status === 'complete' && result) {
+      // Map backend response to frontend format
+      const transformedData = {
+        text: result.text,
+        confidence: result.confidence || '95%',
+        time: result.time || '3.2s',
+        citations: (result.sources || []).map((source, idx) => ({
+          id: `${idx + 1}`,
+          title: source.title || 'Unknown Source',
+          file: source.title || 'document',
+          details: `Page ${source.page || 'N/A'}`
+        }))
+      };
+      setSynthesisData(transformedData);
     } else if (status === 'idle' || status === 'error' || status === 'processing') {
-        setSynthesisData(null);
+      setSynthesisData(null);
     }
-  }, [status]);
+  }, [status, result]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

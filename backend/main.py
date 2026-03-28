@@ -2,12 +2,22 @@ import re
 import uuid
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict
 from graph import app_graph
 from ingest import ingest_from_files
 
 app = FastAPI(title="Smart Knowledge Navigator API v1")
+
+# Add CORS middleware to allow frontend requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (adjust in production)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- Pydantic Models ---
 class QueryRequest(BaseModel):

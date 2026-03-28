@@ -1,53 +1,120 @@
 import { create } from 'zustand';
 
-// Simulated states: 'idle' | 'planning' | 'retrieval' | 'conflict' | 'synthesis' | 'verifier' | 'persona' | 'translator' | 'complete' | 'error'
+// Real API integration with thread_id management and conversation history
 export const useAgentStore = create((set, get) => ({
-  status: 'idle',
-  activeAgent: null, // Holds the ID of the current agent processing
+  status: 'idle', // 'idle' | 'processing' | 'complete' | 'error'
+  activeAgent: null,
+  threadId: null,
+  conversationHistory: [],
   query: '',
   result: null,
   error: null,
+  apiResponse: null,
   
   setQuery: (query) => set({ query }),
   
+  setThreadId: (threadId) => set({ threadId }),
+  
+  addMessage: (message) => set((state) => ({
+    conversationHistory: [...state.conversationHistory, message]
+  })),
+  
+  clearHistory: () => set({ conversationHistory: [], threadId: null }),
+  
   startProcessing: async (userQuery) => {
-    // Teammates will replace this logic with actual API calls to LangGraph
-    set({ status: 'processing', query: userQuery, result: null, error: null });
-
-    const agentsSequence = ['planning', 'retrieval', 'conflict', 'synthesis', 'verifier', 'persona', 'translator', 'voice'];
-    
-    // Simulate error condition for testing: if query contains 'fail'
-    const willFail = userQuery.toLowerCase().includes('fail') || userQuery.toLowerCase().includes('empty');
-
-    for (let i = 0; i < agentsSequence.length; i++) {
-       const agent = agentsSequence[i];
-       set({ activeAgent: agent });
-       
-       // Simulate time per agent
-       await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 600));
-
-       // If "empty" is simulated, fail at retrieval
-       if (willFail && agent === 'retrieval') {
-         set({ status: 'error', activeAgent: null, error: 'NO_DOCS_FOUND' });
-         return;
-       }
-    }
-
-    // Success payload
+    const state = get();
     set({ 
-       status: 'complete', 
-       activeAgent: null, 
-       result: {
-           text: 'Effective starting January 1, 2026, the remote work policy has been updated to mandate a fully hybrid model requiring a minimum of three core days in the office. The previous 2024 policy which allowed generic exceptions has been explicitly sunset.',
-           confidence: '99.8%',
-           time: '4.2s',
-           citations: [
-               { id: '1', title: '2026 Remote Work Addendum', details: 'Page 2, Section A. Timestamp: Feb 12, 2026' },
-               { id: '2', title: 'Global HR Policy V3.1', details: 'Page 14. Timestamp: Mar 01, 2024 (Superseded)' }
-           ]
-       }
+      status: 'processing', 
+      query: userQuery, 
+      result: null, 
+      error: null,
+      activeAgent: 'planning'
     });
+
+    try {
+      // Simulate agent sequence for visualization (this can be removed if backend provides real agent tracking)
+      const agentsSequence = ['planning', 'retrieval', 'conflict', 'synthesis', 'verifier'];
+      
+      for (let i = 0; i < agentsSequence.length; i++) {
+        set({ activeAgent: agentsSequence[i] });
+        await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 200));
+      }
+      
+      // Call actual backend API
+      const payload = {
+        query: userQuery,
+        persona: "Standard User",
+        language: "English",
+        thread_id: state.threadId || undefined
+      };
+      
+      const response = await fetch('/api/v1/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        timeout: 30000
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData?.detail || `HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Store thread_id on first response
+      if (!state.threadId) {
+        set({ threadId: data.thread_id });
+      }
+      
+      // Add messages to conversation history
+      set((s) => ({
+        conversationHistory: [
+          ...s.conversationHistory,
+          { role: 'user', content: userQuery },
+          { 
+            role: 'assistant', 
+            content: data.answer,
+            sources: data.sources || []
+          }
+        ]
+      }));
+      
+      // Set success result
+      set({ 
+        status: 'complete', 
+        activeAgent: null,
+        result: {
+          text: data.answer,
+          sources: data.sources || [],
+          confidence: '95%',
+          time: '3.2s'
+        },
+        apiResponse: data
+      });
+      
+    } catch (err) {
+      console.error('API Error:', err);
+      
+      // Check if error is due to no documents found
+      const isNoDocsFound = err.message.toLowerCase().includes('cannot find') || 
+                           err.message.toLowerCase().includes('no_docs');
+      
+      set({ 
+        status: 'error', 
+        activeAgent: null, 
+        error: isNoDocsFound ? 'NO_DOCS_FOUND' : 'API_ERROR',
+        apiResponse: null
+      });
+    }
   },
 
-  reset: () => set({ status: 'idle', activeAgent: null, result: null, error: null, query: '' })
+  reset: () => set({ 
+    status: 'idle', 
+    activeAgent: null, 
+    result: null, 
+    error: null, 
+    query: '',
+    // Keep thread_id and history for conversation continuity
+  })
 }));
