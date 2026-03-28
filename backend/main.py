@@ -44,7 +44,7 @@ class IngestResponse(BaseModel):
     message: str
     vectors_upserted: int
     documents_processed: int = 0
-    errors: List[str] = None
+    errors: List[str] = Field(default_factory=list)
 
 # --- Endpoints ---
 
