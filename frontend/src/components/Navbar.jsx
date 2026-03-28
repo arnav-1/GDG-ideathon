@@ -2,6 +2,7 @@ import { BrainCircuit } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../store/useAuthStore';
+import LanguageSelector from './LanguageSelector';
 
 export default function Navbar() {
   const location = useLocation();
@@ -51,8 +52,8 @@ export default function Navbar() {
               </Link>
             )}
           </div>
-          
-          <div className="flex items-center gap-3 border-l border-slate-200 pl-6 h-8">
+          <div className="flex items-center gap-3 border-l border-slate-200 pl-6 border-y-0 border-r-0">
+            <LanguageSelector />
             {!user ? (
                <>
                  <Link to="/login" aria-label="Log In" className="text-sm font-bold text-slate-500 hover:text-[#0076CE] px-4 py-2 hover:bg-slate-50 rounded-lg transition-colors tracking-tight">

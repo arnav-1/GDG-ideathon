@@ -1,9 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AgentTrace from '../components/AgentTrace';
 import Navbar from '../components/Navbar';
 import { useAgentStore } from '../store/useAgentStore';
-import { Send, FileText, Anchor, FileQuestion, Play, Pause, Square } from 'lucide-react';
+import { Send, FileText, Anchor, FileQuestion, Play, Pause, Square, Paperclip, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const LANGUAGES = {
+  'English': 'en-US',
+  'Spanish': 'es-ES',
+  'French': 'fr-FR',
+  'German': 'de-DE',
+  'Hindi': 'hi-IN'
+};
 
 function Citation({ tag }) {
   return (
@@ -16,41 +24,28 @@ function Citation({ tag }) {
 
 export default function RagDashboard() {
   const [localQuery, setLocalQuery] = useState('');
+  const messagesEndRef = useRef(null);
   
-  // Teammate Integration: Easy plug-and-play hook for backend synthesis payloads.
-  const [synthesisData, setSynthesisData] = useState(null);
-  
-  // Zustand handles the Agent simulation states globally (Planning -> Retrieval -> etc.)
-  const { status, error, startProcessing } = useAgentStore();
+  const { status, error, startProcessing, chatHistory, language } = useAgentStore();
 
   const isProcessing = status === 'processing';
   const showError = status === 'error';
 
-  // Listen for Zustand simulation completion and set the teammate integration payload automatically for the demo
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   useEffect(() => {
-    if (status === 'complete') {
-        const dummyPayload = {
-           text: 'Effective starting January 1, 2026, the remote work policy has been updated to mandate a fully hybrid model requiring a minimum of three core days in the office. The previous 2024 policy which allowed generic exceptions has been explicitly sunset. Conflict resolved automatically prioritizing the 2026 Addendum.',
-           confidence: '99.8%',
-           time: '4.2s',
-           citations: [
-               { id: '1', title: '2026 Remote Work Addendum', file: 'HR_Policy_2026.pdf', details: 'Page 2, Section A. Timestamp: Feb 12, 2026' },
-               { id: '2', title: 'Global HR Policy V3.1', file: 'Global_HR_v3.pdf', details: 'Page 14. Timestamp: Mar 01, 2024 (Superseded)' }
-           ]
-        };
-        setSynthesisData(dummyPayload);
-    } else if (status === 'idle' || status === 'error' || status === 'processing') {
-        setSynthesisData(null);
-    }
-  }, [status]);
+    scrollToBottom();
+  }, [chatHistory, isProcessing]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!localQuery.trim() || isProcessing) return;
-    startProcessing(localQuery); // Kicks off AgentTrace sequence
+    startProcessing(localQuery);
+    setLocalQuery('');
   };
 
-  // Auto cleanup on unmount
   useEffect(() => {
     return () => {
       if ('speechSynthesis' in window) {
@@ -59,15 +54,16 @@ export default function RagDashboard() {
     };
   }, []);
 
-  const handleVoicePlay = () => {
-    if ('speechSynthesis' in window && synthesisData?.text) {
+  const handleVoicePlay = (text) => {
+    if ('speechSynthesis' in window && text) {
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       } else {
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(synthesisData.text);
+        const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
+        utterance.lang = LANGUAGES[language] || 'en-US';
         window.speechSynthesis.speak(utterance);
       }
     }
@@ -88,194 +84,221 @@ export default function RagDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-transparent text-slate-500 font-sans selection:bg-[#0076CE] selection:text-white pb-20 relative">
+    <div className="h-screen flex flex-col bg-transparent text-slate-500 font-sans selection:bg-[#0076CE] selection:text-white relative overflow-hidden">
       <Navbar />
 
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 mt-32">
+      <main className="flex-grow flex flex-col max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-6 min-h-0">
         <motion.div 
           initial={{ opacity: 0, y: 10 }} 
           animate={{ opacity: 1, y: 0 }} 
           transition={{ duration: 0.5 }}
-          className="text-center mb-10"
+          className="text-center mb-6 shrink-0 z-20"
         >
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-slate-900 mb-4">
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-slate-900 mb-3">
             Knowledge Navigator
           </h2>
-          <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-             Multi-agent synthesized answers mapped across the Dell enterprise corpus.
+          <p className="text-sm md:text-base text-slate-500 max-w-2xl mx-auto">
+             Multi-turn synthesized answers mapped across the Dell enterprise corpus.
           </p>
         </motion.div>
 
-        {/* Floating Search Bar with #0076CE logic and gradient */}
-        <div className="max-w-4xl mx-auto mb-12 transform transition-all duration-300 hover:shadow-2xl rounded-2xl bg-white p-2 shadow-xl border border-white/20 focus-within:ring-2 focus-within:ring-[#0076CE]/50 focus-within:border-[#0076CE] relative z-20">
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
-              type="text"
-              aria-label="Search Query"
-              value={localQuery}
-              onChange={(e) => setLocalQuery(e.target.value)}
-              placeholder="e.g. Try searching for 'updated remote work policy for 2026', or 'fail' to test errors..."
-              className="flex-grow bg-transparent border-0 px-6 py-4 text-lg text-slate-900 focus:ring-0 focus:outline-none placeholder-slate-400 font-medium tracking-tight"
-              disabled={isProcessing}
-            />
-            <button
-              type="submit"
-              aria-label="Submit Search"
-              disabled={isProcessing || !localQuery.trim()}
-              className="bg-gradient-to-r from-[#0076CE] to-[#00447C] hover:text-white hover:scale-105 text-white px-8 py-4 rounded-xl font-bold transition-transform duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-[0_0_15px_rgba(0,118,206,0.3)] tracking-tight"
-            >
-              {isProcessing ? 'Analyzing...' : 'Search'}
-              {!isProcessing && <Send className="w-5 h-5 ml-1 -mr-1" />}
-            </button>
-          </form>
-        </div>
-
-        {/* 40/60 Split Layout */}
-        <div className="max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-20">
+        {/* Dashboard Workspace */}
+        <div className="flex flex-1 gap-6 md:gap-8 min-h-0 w-full relative z-20">
           
-          {/* Column 1: Agent Trace (40%) */}
-          <div className="lg:col-span-5">
+          {/* Left Sidebar: Agent Trace */}
+          <div className="hidden lg:block w-[360px] shrink-0 h-full overflow-y-auto scrollbar-none pb-4">
                <AgentTrace />
           </div>
 
-          {/* Column 2: The Synthesis Output Window (60%) */}
-          <div className="lg:col-span-7">
-            <AnimatePresence mode="wait">
-              {isProcessing ? (
-                 // High Fidelity Shimmering Skeleton Loader
-                 <motion.div 
-                   key="skeleton"
-                   initial={{ opacity: 0, scale: 0.98 }}
-                   animate={{ opacity: 1, scale: 1 }}
-                   exit={{ opacity: 0, scale: 0.98 }}
-                   className="bg-white/70 backdrop-blur-xl border border-white/20 rounded-2xl shadow-xl p-8 h-full min-h-[500px]"
-                 >
-                    <div className="flex items-center gap-3 mb-8 pb-4 border-b border-slate-200">
-                      <div className="w-10 h-10 rounded-lg bg-slate-200 animate-pulse"></div>
-                      <div className="space-y-2">
-                         <div className="w-48 h-5 bg-gradient-to-r from-slate-200 to-slate-100 rounded animate-pulse"></div>
-                         <div className="w-24 h-3 bg-slate-100 rounded animate-pulse"></div>
-                      </div>
+          {/* Center: Main Chat Feed */}
+          <div className="flex-1 flex justify-center min-w-0 h-full">
+            <div className="w-full max-w-[880px] flex flex-col h-full bg-white/50 backdrop-blur-2xl border border-white/60 shadow-[0_8px_40px_rgb(0,0,0,0.06)] rounded-[2rem] overflow-hidden relative">
+              
+              {/* Scrollable Chat Message Area */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                <AnimatePresence>
+                  {chatHistory.length === 0 && !isProcessing && !showError && (
+                     <motion.div 
+                       initial={{ opacity: 0 }}
+                       animate={{ opacity: 1 }}
+                       exit={{ opacity: 0 }}
+                       className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-sm border border-white/80 p-10 h-full flex flex-col items-center justify-center text-center mt-4 mx-4"
+                     >
+                        <div className="w-20 h-20 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl flex items-center justify-center mb-6 shadow-inner border border-white">
+                           <FileText className="w-10 h-10 text-[#0076CE]" />
+                        </div>
+                        <p className="text-xl tracking-tight font-bold text-slate-900 mb-3">Ready to Synthesize</p>
+                        <p className="text-[15px] text-slate-500 max-w-sm leading-relaxed">Submit a query securely to dispatch the neural multi-agent system across internal documents.</p>
+                     </motion.div>
+                  )}
+
+                  {chatHistory.map((msg) => (
+                    <motion.div 
+                      key={msg.id}
+                      initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      {msg.type === 'user' ? (
+                        <div className="bg-slate-100 text-slate-900 border border-slate-200 rounded-2xl rounded-tr-sm shadow-sm px-5 py-3.5 max-w-[85%]">
+                          <p className="font-medium text-[15px]">{msg.text}</p>
+                        </div>
+                      ) : (
+                        <div className="bg-white/90 backdrop-blur-xl border border-white/60 rounded-2xl rounded-tl-sm shadow-md p-5 sm:p-7 max-w-[100%] w-full">
+                          <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-100">
+                            <div className="flex items-center gap-2.5">
+                              <div className="bg-[#0076CE] p-1.5 rounded-lg text-white shadow-md">
+                                <CheckIcon />
+                              </div>
+                              <h3 className="text-base font-bold tracking-tight text-slate-900">Verified Answer</h3>
+                              <span className="text-xs text-slate-400 font-mono ml-2 border-l border-slate-200 pl-3">
+                                {msg.time} • {msg.confidence}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 border border-slate-100 bg-slate-50/50 rounded-lg p-0.5">
+                              <button 
+                                onClick={() => handleVoicePlay(msg.text)}
+                                aria-label="Play Voice"
+                                className="p-1.5 text-slate-400 hover:text-[#0076CE] hover:bg-white rounded-md transition-all shadow-sm"
+                              >
+                                <Play className="w-4 h-4 fill-current" />
+                              </button>
+                              <button 
+                                onClick={handleVoicePause}
+                                aria-label="Pause Voice"
+                                className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-white rounded-md transition-all shadow-sm"
+                              >
+                                <Pause className="w-4 h-4 fill-current" />
+                              </button>
+                              <button 
+                                onClick={handleVoiceStop}
+                                aria-label="Stop Voice"
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-md transition-all shadow-sm"
+                              >
+                                <Square className="w-3.5 h-3.5 ml-0.5 fill-current" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="prose prose-slate max-w-none text-slate-800 font-medium leading-relaxed mb-6 text-[15px]">
+                            <p>{msg.text}</p>
+                          </div>
+
+                          {msg.citations && msg.citations.length > 0 && (
+                            <div className="bg-[#F8FAFC] rounded-xl p-4 sm:p-5 border border-slate-200/60 shadow-inner">
+                              <h4 className="text-xs font-bold tracking-tight text-slate-800 uppercase mb-3 flex items-center gap-1.5">
+                                <Anchor className="w-3.5 h-3.5 text-[#0076CE]" /> Source Citations
+                              </h4>
+                              
+                              <div className="flex flex-wrap mb-3">
+                                {msg.citations.map(cit => (
+                                   <Citation key={cit.id} tag={cit.file} />
+                                ))}
+                              </div>
+
+                              <ul className="space-y-2">
+                                {msg.citations.map((cit, idx) => (
+                                   <li key={idx} className={`flex items-start gap-3 p-3 rounded-lg transition-all ${idx === 0 ? 'bg-white shadow-sm border border-[#0076CE]/20 border-l-[3px] border-l-[#0076CE]' : 'bg-transparent border border-slate-200/60 opacity-60 line-through'}`}>
+                                     <FileText className={`w-4 h-4 flex-shrink-0 mt-0.5 ${idx === 0 ? 'text-[#0076CE]' : 'text-slate-400'}`} />
+                                     <div>
+                                       <p className={`text-[13px] font-bold tracking-tight leading-tight mb-0.5 ${idx === 0 ? 'text-slate-900' : 'text-slate-500'}`}>{cit.title}</p>
+                                       <p className={`text-[11px] ${idx === 0 ? 'text-[#0076CE]' : 'text-slate-400'}`}>{cit.details}</p>
+                                     </div>
+                                   </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+
+                  {isProcessing && (
+                     <motion.div 
+                       initial={{ opacity: 0, scale: 0.98 }}
+                       animate={{ opacity: 1, scale: 1 }}
+                       exit={{ opacity: 0, scale: 0.98 }}
+                       className="bg-white/80 backdrop-blur-xl border border-white/60 rounded-2xl shadow-md p-6 sm:p-7 max-w-[100%] w-full"
+                     >
+                        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                          <div className="w-8 h-8 rounded-lg bg-slate-200 animate-pulse"></div>
+                          <div className="space-y-2.5">
+                             <div className="w-40 h-3.5 bg-gradient-to-r from-slate-200 to-slate-100 rounded animate-pulse"></div>
+                             <div className="w-20 h-2bg-slate-100 rounded animate-pulse"></div>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                           <div className="w-full h-3 bg-gradient-to-r from-slate-200 to-slate-100 rounded animate-pulse"></div>
+                           <div className="w-full h-3 bg-gradient-to-r from-slate-200 to-slate-100 rounded animate-pulse"></div>
+                           <div className="w-4/5 h-3 bg-gradient-to-r from-slate-200 to-slate-100 rounded animate-pulse"></div>
+                        </div>
+                     </motion.div>
+                  )}
+
+                  {showError && (
+                     <motion.div 
+                       initial={{ opacity: 0, scale: 0.98 }}
+                       animate={{ opacity: 1, scale: 1 }}
+                       className="bg-red-50/90 backdrop-blur-xl rounded-2xl shadow-md border border-red-500/20 p-8 flex flex-col items-center justify-center text-center text-slate-900"
+                     >
+                        <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center mb-4 border border-red-100 shadow-sm">
+                           <FileQuestion className="w-7 h-7 text-red-500" />
+                        </div>
+                        <h3 className="text-lg font-bold tracking-tight text-red-600 mb-2">No Documents Found</h3>
+                        <p className="text-[15px] max-w-sm leading-relaxed text-slate-500 mb-5">
+                          The retrieval agent was unable to locate any internal documentation matching your query.
+                        </p>
+                        <button aria-label="Modify Search Parameters" className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold tracking-tight rounded-lg shadow-sm transition-colors text-sm">
+                          Modify Search Parameters
+                        </button>
+                     </motion.div>
+                  )}
+                </AnimatePresence>
+                <div ref={messagesEndRef} className="h-2" />
+              </div>
+
+              {/* Sticky Input Field */}
+              <div className="p-4 sm:p-5 bg-white/70 backdrop-blur-xl border-t border-white/80">
+                <div className="transform transition-all duration-300 hover:shadow-lg rounded-2xl bg-white p-1.5 shadow-sm border border-slate-200 focus-within:ring-2 focus-within:ring-[#0076CE]/30 focus-within:border-[#0076CE]">
+                  <form onSubmit={handleSubmit} className="flex gap-2 items-center">
+                    <div className="flex items-center pl-2 gap-1.5 shrink-0">
+                      <button type="button" aria-label="Upload File" className="p-2 text-slate-400 hover:text-[#0076CE] hover:bg-slate-50 rounded-xl transition-colors">
+                        <Paperclip className="w-[18px] h-[18px]" />
+                      </button>
+                      <button type="button" aria-label="Use Microphone" className="p-2 text-slate-400 hover:text-[#0076CE] hover:bg-slate-50 rounded-xl transition-colors">
+                        <Mic className="w-[18px] h-[18px]" />
+                      </button>
                     </div>
                     
-                    <div className="space-y-4">
-                       <div className="w-full h-4 bg-gradient-to-r from-slate-200 to-slate-100 rounded animate-pulse"></div>
-                       <div className="w-full h-4 bg-gradient-to-r from-slate-200 to-slate-100 rounded animate-pulse"></div>
-                       <div className="w-5/6 h-4 bg-gradient-to-r from-slate-200 to-slate-100 rounded animate-pulse"></div>
-                    </div>
+                    <input
+                      type="text"
+                      aria-label="Search Query"
+                      value={localQuery}
+                      onChange={(e) => setLocalQuery(e.target.value)}
+                      placeholder="Ask about HR policies, remote work, or benefits..."
+                      className="flex-grow bg-transparent border-0 px-2 py-3 text-[15px] text-slate-900 focus:ring-0 focus:outline-none placeholder-slate-400 font-medium tracking-tight"
+                      disabled={isProcessing}
+                    />
                     
-                    <div className="mt-12 space-y-4">
-                       <div className="w-40 h-4 bg-slate-200 rounded animate-pulse mb-6"></div>
-                       <div className="w-full h-16 bg-[#0076CE]/5 rounded-lg border border-[#0076CE]/10 animate-pulse"></div>
-                       <div className="w-full h-16 bg-[#0076CE]/5 rounded-lg border border-[#0076CE]/10 animate-pulse"></div>
-                    </div>
-                 </motion.div>
-              ) : synthesisData ? (
-                 // Success State
-                 <motion.div 
-                   key="success"
-                   initial={{ opacity: 0, x: 20 }}
-                   animate={{ opacity: 1, x: 0 }}
-                   className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-8 h-full min-h-[500px]"
-                 >
-                  <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-[#0076CE] p-2 rounded-md text-white shadow-sm">
-                        <CheckIcon />
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-bold tracking-tight text-slate-900">Verified Answer</h3>
-                        <p className="text-xs text-slate-500 font-mono">Synthesized in {synthesisData.time} | Confidence: {synthesisData.confidence}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button 
-                        onClick={handleVoicePlay}
-                        aria-label="Play Voice"
-                        className="p-2 text-slate-400 hover:text-[#0076CE] hover:bg-[#0076CE]/10 rounded-lg transition-colors title='Play Voice'"
-                      >
-                        <Play className="w-5 h-5 fill-current" />
-                      </button>
-                      <button 
-                        onClick={handleVoicePause}
-                        aria-label="Pause Voice"
-                        className="p-2 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors title='Pause Voice'"
-                      >
-                        <Pause className="w-5 h-5 fill-current" />
-                      </button>
-                      <button 
-                        onClick={handleVoiceStop}
-                        aria-label="Stop Voice"
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors title='Stop Voice'"
-                      >
-                        <Square className="w-4 h-4 ml-0.5 fill-current" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="prose prose-slate max-w-none text-slate-900 font-medium leading-relaxed mb-8">
-                    <p>{synthesisData.text}</p>
-                  </div>
-
-                  <div className="pt-6 border-t border-slate-200">
-                    <h4 className="text-sm font-bold tracking-tight text-slate-900 uppercase mb-4 flex items-center gap-2">
-                      <Anchor className="w-4 h-4 text-[#0076CE]" /> Source Citations
-                    </h4>
-                    
-                    <div className="flex flex-wrap mb-4">
-                      {synthesisData.citations.map(cit => (
-                         <Citation key={cit.id} tag={cit.file} />
-                      ))}
-                    </div>
-
-                    <ul className="space-y-3">
-                      {synthesisData.citations.map((cit, idx) => (
-                         <li key={idx} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${idx === 0 ? 'bg-white shadow border-[#0076CE]/20 border-l-4 border-l-[#0076CE]' : 'bg-transparent border-slate-200 opacity-60 line-through'}`}>
-                           <FileText className={`w-5 h-5 flex-shrink-0 mt-0.5 ${idx === 0 ? 'text-[#0076CE]' : 'text-slate-400'}`} />
-                           <div>
-                             <p className={`text-sm font-bold tracking-tight ${idx === 0 ? 'text-slate-900' : 'text-slate-500'}`}>{cit.title}</p>
-                             <p className={`text-xs ${idx === 0 ? 'text-[#0076CE]' : 'text-slate-400'}`}>{cit.details}</p>
-                           </div>
-                         </li>
-                      ))}
-                    </ul>
-                  </div>
-                </motion.div>
-              ) : showError ? (
-                 // Error State: No Documents Found Placeholder
-                 <motion.div 
-                   key="error"
-                   initial={{ opacity: 0, scale: 0.98 }}
-                   animate={{ opacity: 1, scale: 1 }}
-                   className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-red-500/20 p-8 h-full flex flex-col items-center justify-center text-center text-slate-900 min-h-[500px]"
-                 >
-                    <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-6 border border-red-100">
-                       <FileQuestion className="w-10 h-10 text-red-500" />
-                    </div>
-                    <h3 className="text-xl font-bold tracking-tight text-red-600 mb-2">No Documents Found</h3>
-                    <p className="text-sm max-w-sm leading-relaxed text-slate-500 mb-6">
-                      The retrieval agent was unable to locate any internal documentation matching your query within the selected permission scope.
-                    </p>
-                    <button aria-label="Modify Search Parameters" className="px-5 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-900 font-bold tracking-tight rounded-lg shadow-sm transition-colors text-sm">
-                      Modify Search Parameters
+                    <button
+                      type="submit"
+                      aria-label="Submit Search"
+                      disabled={isProcessing || !localQuery.trim()}
+                      className="bg-gradient-to-r from-[#0076CE] to-[#0058A3] hover:scale-105 text-white p-3.5 rounded-xl transition-all duration-300 flex items-center justify-center shrink-0 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_10px_rgba(0,118,206,0.2)]"
+                    >
+                      {isProcessing ? <div className="w-[18px] h-[18px] border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send className="w-[18px] h-[18px]" />}
                     </button>
-                 </motion.div>
-              ) : (
-                 // Idle Placeholder
-                 <motion.div 
-                   key="idle"
-                   initial={{ opacity: 0 }}
-                   animate={{ opacity: 1 }}
-                   className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-8 h-full flex flex-col items-center justify-center text-center min-h-[500px]"
-                 >
-                    <div className="w-20 h-20 bg-gradient-to-br from-[#F8FAFC] to-[#F1F5F9] rounded-2xl flex items-center justify-center mb-6 shadow-inner border border-white">
-                       <FileText className="w-10 h-10 text-[#0076CE]" />
-                    </div>
-                    <p className="text-xl tracking-tight font-bold text-slate-900 mb-2">Ready to Synthesize</p>
-                    <p className="text-sm text-slate-500 max-w-sm leading-relaxed">Submit a query using the search bar to dispatch the multi-agent system across the internal corpus.</p>
-                 </motion.div>
-              )}
-            </AnimatePresence>
+                  </form>
+                </div>
+                <div className="text-center mt-3">
+                  <span className="text-[11px] text-slate-500 font-medium">Verify system responses with original documents. Output may be inaccurate.</span>
+                </div>
+              </div>
+              
+            </div>
           </div>
         </div>
       </main>
@@ -285,6 +308,7 @@ export default function RagDashboard() {
 
 function CheckIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
   );
 }
+
