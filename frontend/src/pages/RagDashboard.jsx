@@ -228,7 +228,7 @@ export default function RagDashboard() {
                             />
                           )}
 
-                          <div className="prose prose-slate max-w-none text-slate-800 font-medium leading-relaxed mb-6 text-[15px]">
+                          <div className="prose prose-slate max-w-none text-slate-800 font-medium leading-relaxed mb-6 text-[13px]">
                             <p>{msg.text}</p>
                           </div>
 

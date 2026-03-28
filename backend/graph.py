@@ -299,7 +299,14 @@ def synthesizer_node(state: AgentState) -> Dict:
         "4. Language: The final output must be translated natively into the requested <language>.\n"
         "5. CRITICAL - Conflict Resolution: If <conflict_resolution_notes> contains anything other than 'No conflicts detected', you MUST follow its instructions on which facts to prioritize and which to ignore. This overrides any other instruction.\n"
         "</instructions>\n\n"
-        "Take a deep breath and think step-by-step. First, write out your reasoning and map out which facts from the <context> answer the <user_query> inside <thinking> tags. Then, provide your final formatted response."
+        "RESPONSE FORMAT: You MUST return your response in this exact format:\n"
+        "<thinking>\n"
+        "Your step-by-step reasoning and fact mapping from context\n"
+        "</thinking>\n\n"
+        "<answer>\n"
+        "Your final formatted answer with citations\n"
+        "</answer>\n\n"
+        "Take a deep breath and think step-by-step. First, write out your reasoning inside <thinking> tags. Then, provide your final response inside <answer> tags."
     )
     
     user_msg = (

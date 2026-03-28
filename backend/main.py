@@ -70,13 +70,16 @@ async def process_query(request: QueryRequest):
         # Extract thinking and answer sections from final_answer
         full_text = result["final_answer"]
         
-        # Parse thinking (between <thinking> tags)
-        thinking_match = re.search(r"<thinking>(.*?)</thinking>", full_text, re.DOTALL)
+        # Parse thinking (between <thinking> tags) - case insensitive
+        thinking_match = re.search(r"<thinking>(.*?)</thinking>", full_text, re.DOTALL | re.IGNORECASE)
         thinking = thinking_match.group(1).strip() if thinking_match else ""
         
-        # Parse answer (between <answer> tags)
-        answer_match = re.search(r"<answer>(.*?)</answer>", full_text, re.DOTALL)
-        clean_answer = answer_match.group(1).strip() if answer_match else full_text
+        # Parse answer (between <answer> tags) - case insensitive
+        answer_match = re.search(r"<answer>(.*?)</answer>", full_text, re.DOTALL | re.IGNORECASE)
+        clean_answer = answer_match.group(1).strip() if answer_match else full_text.strip()
+        
+        # Remove any remaining tags from answer
+        clean_answer = re.sub(r"</?thinking>|</?answer>", "", clean_answer, flags=re.IGNORECASE).strip()
         
         # Fallback if no docs retrieved
         if not result["retrieved_docs"]:
