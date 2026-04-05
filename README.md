@@ -8,12 +8,12 @@
 
 ---
 
-## 📖 Project Essence
+##  Project Essence
 The **Smart Knowledge Navigator (SKN)** is an advanced **Agentic Retrieval-Augmented Generation (RAG)** platform designed to transform static documentation into a dynamic, verified intelligence layer. Unlike traditional RAG systems that follow a linear "Retrieve → Generate" path, SKN employs **Stateful Multi-Agent Orchestration** to simulate expert reasoning—decomposing complex queries, reconciling conflicting data, and self-correcting outputs for maximum precision.
 
 ---
 
-## 💎 Novelty & Core Capabilities
+##  Novelty & Core Capabilities
 
 SKN addresses common failure modes in standard AI retrieval by introducing:
 
@@ -24,7 +24,7 @@ SKN addresses common failure modes in standard AI retrieval by introducing:
 
 ---
 
-## 🛠️ The Tech Stack
+##  The Tech Stack
 
 ### **Backend: Multi-Agent Orchestration (Python & FastAPI)**
 *   **LangGraph:** Manages complex, stateful, and cyclic multi-agent workflows.
@@ -39,7 +39,7 @@ SKN addresses common failure modes in standard AI retrieval by introducing:
 
 ---
 
-## 🏗️ Technical Architecture
+##  Technical Architecture
 The system follows a strictly decoupled micro-architecture:
 
 1.  **Ingestion Pipeline:** Pre-processes documents into semantic chunks via HuggingFace Embeddings.
@@ -53,7 +53,7 @@ The system follows a strictly decoupled micro-architecture:
 
 ---
 
-## 🚀 Deployment & Installation
+##  Deployment & Installation
 
 ### **Prerequisites**
 - Python 3.11+
@@ -77,7 +77,7 @@ npm run dev
 
 ---
 
-## 📁 Documentation
+##  Documentation
 For deep dives into specific subsystems, see the `integration/` folder:
 - [Architecture Details](integration/architecture.md)
 - [API Endpoints](integration/endpoints.md)
