@@ -34,6 +34,7 @@ class AgentState(TypedDict):
 
 def planner_node(state: AgentState) -> Dict:
     """Agent 1: Generate HyDE, extract filters, and expand query variations."""
+    # Using 70B for the core reasoning nodes to maintain intelligence/accuracy
     llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
     
     system_prompt = (
@@ -141,39 +142,54 @@ def retriever_node(state: AgentState) -> Dict:
     semantic_results = {}  
     
     # --- SEMANTIC SEARCH PHASE ---
-    for query in all_queries:
-        try:
-            # Get embedding for query
-            query_embedding = embeddings.embed_query(query)
+    async def fetch_embeddings(query):
+        return await asyncio.to_thread(embeddings.embed_query, query)
+
+    async def query_pinecone(embedding):
+        return await asyncio.to_thread(
+            index.query,
+            vector=embedding,
+            top_k=15,
+            include_metadata=True,
+            filter=pinecone_filter
+        )
+
+    async def process_all_queries():
+        tasks = [fetch_embeddings(q) for q in all_queries]
+        query_embeddings = await asyncio.gather(*tasks)
+        
+        query_tasks = [query_pinecone(emb) for emb in query_embeddings]
+        all_results = await asyncio.gather(*query_tasks)
+        return all_results
+
+    # Since node is sync, but we want to speed it up with internal async
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    results_list = loop.run_until_complete(process_all_queries())
+
+    for results in results_list:
+        # Process results
+        for match in results.get("matches", []):
+            doc_content = match.get("metadata", {}).get("text", "")
+            similarity = match.get("score", 0)
             
-            # Query Pinecone
-            results = index.query(
-                vector=query_embedding,
-                top_k=15,
-                include_metadata=True,
-                filter=pinecone_filter
-            )
-            
-            # Process results
-            for match in results.get("matches", []):
-                doc_content = match.get("metadata", {}).get("text", "")
-                similarity = match.get("score", 0)
-                
-                if doc_content:
-                    # Store max score across all query variations
-                    if doc_content not in semantic_results:
-                        semantic_results[doc_content] = {
-                            "score": similarity,
-                            "source": match.get("metadata", {}).get("source", "Unknown"),
-                            "page": match.get("metadata", {}).get("page_number", 0)
-                        }
-                    else:
-                        semantic_results[doc_content]["score"] = max(
-                            semantic_results[doc_content]["score"], similarity
-                        )
-        except Exception as e:
-            print(f"Error in semantic search for query '{query}': {e}")
-            continue
+            if doc_content:
+                # Store max score across all query variations
+                if doc_content not in semantic_results:
+                    semantic_results[doc_content] = {
+                        "score": similarity,
+                        "source": match.get("metadata", {}).get("source", "Unknown"),
+                        "page": match.get("metadata", {}).get("page_number", 0)
+                    }
+                else:
+                    semantic_results[doc_content]["score"] = max(
+                        semantic_results[doc_content]["score"], similarity
+                    )
     
     if not semantic_results:
         print(f"Warning: No documents found. Original query: {state['user_query']}")

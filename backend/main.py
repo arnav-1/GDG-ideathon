@@ -1,5 +1,7 @@
 import re
+import os
 import uuid
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +9,9 @@ from pydantic import BaseModel, Field
 from typing import List, Dict
 from graph import app_graph
 from ingest import ingest_from_files
+
+# Explicitly load environment variables
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 app = FastAPI(title="Smart Knowledge Navigator API v1")
 
